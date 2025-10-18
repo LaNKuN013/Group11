@@ -33,6 +33,22 @@ if "offline_msgs" not in st.session_state:
 # 标记是否已手动初始化过数据库（仅改善 UX，不影响功能）
 if "db_inited" not in st.session_state:
     st.session_state.db_inited = False
+    
+def apply_chat_input_visibility():
+    """根据当前页面，立即显示/隐藏底部 st.chat_input 的容器。"""
+    show = st.session_state.get("page", "offline") == "offline"
+    css = f"""
+    <style>
+      div[data-testid='stChatInput'] {{
+        display: {"block" if show else "none"} !important;
+      }}
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
+def reserve_footer_space():
+    """非聊天页预留与 chat_input 相近的高度，减少切页跳动感。"""
+    st.markdown("<div style='height:64px'></div>", unsafe_allow_html=True)
 
 # =============== LAZY IMPORT HELPERS (关键) ===================
 def lazy_import_psycopg():
@@ -150,69 +166,9 @@ def init_db():
     st.session_state.db_inited = True
     return True
 
-# def create_ticket(title: str, desc: str):
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)                     # <— add
-#         with conn.cursor() as cur:
-#             cur.execute(
-#                 "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
-#                 (title, desc, "open"),
-#             )
-#             return cur.fetchone()["id"]
-
-# def list_tickets(limit: int = 50):
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)                     # <— add
-#         with conn.cursor() as cur:
-#             cur.execute("""
-#                 SELECT id, title, status, description, created_at
-#                 FROM repair_tickets
-#                 ORDER BY id DESC
-#                 LIMIT %s;
-#             """, (limit,))
-#             return cur.fetchall()
-
-# def clear_tickets():
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)                     # <— add
-#         with conn.cursor() as cur:
-#             cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
-
-# def create_reminder(day_of_month: int, note: str):
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)                     # <— add
-#         with conn.cursor() as cur:
-#             cur.execute(
-#                 "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
-#                 (day_of_month, note),
-#             )
-#             return cur.fetchone()["id"]
-
-# def list_reminders(limit: int = 20):
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)                     # <— add
-#         with conn.cursor() as cur:
-#             cur.execute("""
-#                 SELECT id, day_of_month, note, created_at
-#                 FROM rent_reminders
-#                 ORDER BY id DESC
-#                 LIMIT %s;
-#             """, (limit,))
-#             return cur.fetchall()
-
-# def clear_reminders():
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)                     # <— add
-#         with conn.cursor() as cur:
-#             cur.execute("TRUNCATE TABLE rent_reminders RESTART IDENTITY;")
-
 def create_ticket(title: str, desc: str):
     with get_db_conn() as conn:
-        # 仅首次确保建表
-        if not st.session_state.get("db_checked"):
-            ensure_schema(conn)
-            st.session_state.db_checked = True
-
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
@@ -220,13 +176,9 @@ def create_ticket(title: str, desc: str):
             )
             return cur.fetchone()["id"]
 
-
 def list_tickets(limit: int = 50):
     with get_db_conn() as conn:
-        if not st.session_state.get("db_checked"):
-            ensure_schema(conn)
-            st.session_state.db_checked = True
-
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, title, status, description, created_at
@@ -236,23 +188,15 @@ def list_tickets(limit: int = 50):
             """, (limit,))
             return cur.fetchall()
 
-
 def clear_tickets():
     with get_db_conn() as conn:
-        if not st.session_state.get("db_checked"):
-            ensure_schema(conn)
-            st.session_state.db_checked = True
-
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
 
-
 def create_reminder(day_of_month: int, note: str):
     with get_db_conn() as conn:
-        if not st.session_state.get("db_checked"):
-            ensure_schema(conn)
-            st.session_state.db_checked = True
-
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
@@ -260,13 +204,9 @@ def create_reminder(day_of_month: int, note: str):
             )
             return cur.fetchone()["id"]
 
-
 def list_reminders(limit: int = 20):
     with get_db_conn() as conn:
-        if not st.session_state.get("db_checked"):
-            ensure_schema(conn)
-            st.session_state.db_checked = True
-
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, day_of_month, note, created_at
@@ -276,15 +216,12 @@ def list_reminders(limit: int = 20):
             """, (limit,))
             return cur.fetchall()
 
-
 def clear_reminders():
     with get_db_conn() as conn:
-        if not st.session_state.get("db_checked"):
-            ensure_schema(conn)
-            st.session_state.db_checked = True
-
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE rent_reminders RESTART IDENTITY;")
+
 
 # ================== RAG HELPERS（惰性导入） ====================
 def build_vectorstore(uploaded_files):
@@ -446,77 +383,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# with st.sidebar:
-#     st.header("🌐 Language / 语言")
-#     lang_choice = st.radio(
-#         "Select language / 选择语言",
-#         options=["English", "中文"],
-#         index=0 if st.session_state.get("lang", "en") == "en" else 1,
-#     )
-#     st.session_state.lang = "en" if lang_choice == "English" else "zh"
-
-#     if st.session_state.lang == "en":
-#         btn_general = "💬 General Chat"
-#         btn_contract = "💬 Contract Chat"
-#         btn_ticket = "🧰 Create Repair Ticket"
-#         btn_reminder = "💰 Create Rent Reminder"
-#         caption_text = "Upload PDFs anytime. Build the knowledge base after setting OPENAI_API_KEY below."
-#         api_expander_label = "API Setup (for Contract Chat)"
-#         api_hint = "API key set for this session."
-#         clear_label = "🧹 Clear Chat"
-#         clear_success = "All chat history cleared."
-#     else:
-#         btn_general = "💬 普通聊天"
-#         btn_contract = "💬 合同问答"
-#         btn_ticket = "🧰 报修创建"
-#         btn_reminder = "💰 房租提醒"
-#         caption_text = "可随时上传 PDF。先在下方设置 OPENAI_API_KEY 再构建知识库。"
-#         api_expander_label = "API 设置（用于合同问答）"
-#         api_hint = "API 密钥已设置。"
-#         clear_label = "🧹 清空聊天"
-#         clear_success = "所有聊天记录已清空。"
-
-#     # 导航按钮（切换而不触发重型导入）
-#     if st.button(btn_general, use_container_width=True): st.session_state.page = "offline"
-#     if st.button(btn_contract, use_container_width=True): st.session_state.page = "chat"
-#     if st.button(btn_ticket, use_container_width=True): st.session_state.page = "ticket"
-#     if st.button(btn_reminder, use_container_width=True): st.session_state.page = "reminder"
-
-#     with st.expander(api_expander_label):
-#         api_key_in = st.text_input("OpenAI API Key", type="password")
-#         if api_key_in:
-#             os.environ["OPENAI_API_KEY"] = api_key_in
-#             st.success(api_hint)
-
-#     st.caption(caption_text)
-#     st.divider()
-
-#     # 诊断：改成**按钮触发**，避免冷启动阻塞
-#     with st.expander("🧪 Diagnostics (on-demand)"):
-#         if st.button("Test Neon connection"):
-#             try:
-#                 with get_db_conn() as conn:
-#                     with conn.cursor() as cur:
-#                         cur.execute("SELECT NOW();")
-#                 st.success("DB connected ✔️")
-#             except Exception as e:
-#                 st.error(f"DB connect failed: {e}")
-#         st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
-
-#     if st.button(clear_label, use_container_width=True):
-#         st.session_state.offline_msgs.clear()
-#         st.session_state.online_msgs.clear()
-#         st.session_state.pop("vectorstore", None)
-#         st.session_state.pop("chain", None)
-#         chain = st.session_state.get("chain")
-#         if chain and getattr(chain, "memory", None):
-#             try:
-#                 chain.memory.clear()
-#             except Exception:
-#                 pass
-#         st.success(clear_success)
-#         st.rerun()
-
 with st.sidebar:
     st.header("🌐 Language / 语言")
     lang_choice = st.radio(
@@ -589,6 +455,9 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"DB connect failed: {e}")
         st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
+        
+# —— Sidebar 结束后立刻调用，确保每次切页先隐藏/显示 chat 输入条
+apply_chat_input_visibility()
 
 # ========================= PAGES（单文件内切换） =========================
 
