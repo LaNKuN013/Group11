@@ -453,35 +453,61 @@ with st.sidebar:
         st.success(clear_success)
     
     # （可选）单独的“重置知识库”按钮
-    reset_kb_label = "♻️ Reset Knowledge Base" if st.session_state.lang != "zh" else "♻️ 重置知识库"
-    if st.button(reset_kb_label, use_container_width=True, key="btn_reset_kb"):
-        st.session_state.pop("vectorstore", None)
-        st.session_state.pop("chain", None)
-        # 若用了链的 memory，可安全清一次
-        chain = st.session_state.get("chain")
-        if chain and getattr(chain, "memory", None):
-            try:
-                chain.memory.clear()
-            except Exception:
-                pass
-        st.success("Knowledge base reset. Build it again to ask questions." 
-                   if st.session_state.lang != "zh" 
-                   else "知识库已重置，请重新构建后再提问。")
+    # reset_kb_label = "♻️ Reset Knowledge Base" if st.session_state.lang != "zh" else "♻️ 重置知识库"
+    # if st.button(reset_kb_label, use_container_width=True, key="btn_reset_kb"):
+    #     st.session_state.pop("vectorstore", None)
+    #     st.session_state.pop("chain", None)
+    #     # 若用了链的 memory，可安全清一次
+    #     chain = st.session_state.get("chain")
+    #     if chain and getattr(chain, "memory", None):
+    #         try:
+    #             chain.memory.clear()
+    #         except Exception:
+    #             pass
+    #     st.success("Knowledge base reset. Build it again to ask questions." 
+    #                if st.session_state.lang != "zh" 
+    #                else "知识库已重置，请重新构建后再提问。")
 
     st.caption(caption_text)
     st.divider()
 
+    # # --- Diagnostics（留在最后）---
+    # with st.expander("🧪 Diagnostics (on-demand)"):
+    #     if st.button("Test Neon connection"):
+    #         try:
+    #             with get_db_conn() as conn:
+    #                 with conn.cursor() as cur:
+    #                     cur.execute("SELECT NOW();")
+    #             st.success("DB connected ✔️")
+    #         except Exception as e:
+    #             st.error(f"DB connect failed: {e}")
+    #     st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
+    
     # --- Diagnostics（留在最后）---
-    with st.expander("🧪 Diagnostics (on-demand)"):
-        if st.button("Test Neon connection"):
+    if st.session_state.lang == "zh":
+        diag_label = "🧪 诊断（按需执行）"
+        test_label = "测试 Neon 数据库连接"
+        db_success = "数据库连接成功 ✔️"
+        db_fail = "数据库连接失败："
+        api_label = "检测到 API Key："
+    else:
+        diag_label = "🧪 Diagnostics (on-demand)"
+        test_label = "Test Neon connection"
+        db_success = "DB connected ✔️"
+        db_fail = "DB connect failed: "
+        api_label = "API Key detected:"
+
+    with st.expander(diag_label):
+        if st.button(test_label):
             try:
                 with get_db_conn() as conn:
                     with conn.cursor() as cur:
                         cur.execute("SELECT NOW();")
-                st.success("DB connected ✔️")
+                st.success(db_success)
             except Exception as e:
-                st.error(f"DB connect failed: {e}")
-        st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
+                st.error(f"{db_fail}{e}")
+
+        st.write(f"{api_label} {bool(os.getenv('OPENAI_API_KEY'))}")
         
 # —— Sidebar 结束后立刻调用，确保每次切页先隐藏/显示 chat 输入条
 apply_chat_input_visibility()
@@ -572,20 +598,59 @@ if st.session_state.page == "chat":
         "上传租赁合同或房屋守则（PDF）" if is_zh else "Upload PDF contracts or house rules",
         type="pdf", accept_multiple_files=True
     )
+    # if uploaded:
+    #     build_disabled = not bool(os.getenv("OPENAI_API_KEY"))
+    #     clicked = st.button(
+    #         "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
+    #         disabled=build_disabled,
+    #         help=( "请先设置 OPENAI_API_KEY" if build_disabled else "根据 PDF 构建 FAISS 索引" )
+    #              if is_zh else ( "Set OPENAI_API_KEY first" if build_disabled else "Build FAISS index from PDFs" ),
+    #     )
+    #     if clicked:
+    #         with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
+    #             vs = build_vectorstore(uploaded)
+    #             st.session_state.vectorstore = vs
+    #             st.session_state.chain = create_chain(vs)
+    #         st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
+        
     if uploaded:
         build_disabled = not bool(os.getenv("OPENAI_API_KEY"))
-        clicked = st.button(
-            "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
-            disabled=build_disabled,
-            help=( "请先设置 OPENAI_API_KEY" if build_disabled else "根据 PDF 构建 FAISS 索引" )
-                 if is_zh else ( "Set OPENAI_API_KEY first" if build_disabled else "Build FAISS index from PDFs" ),
-        )
+
+        col1, col2 = st.columns([3, 2])
+        with col1:
+            clicked = st.button(
+                "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
+                disabled=build_disabled,
+                help=("请先设置 OPENAI_API_KEY" if build_disabled else "根据 PDF 构建 FAISS 索引")
+                if is_zh
+                else ("Set OPENAI_API_KEY first" if build_disabled else "Build FAISS index from PDFs"),
+                use_container_width=True,
+            )
+        with col2:
+            reset_clicked = st.button(
+                "♻️ 重置知识库" if is_zh else "♻️ Reset Knowledge Base",
+                use_container_width=True,
+            )
+
+        # ===== 构建知识库 =====
         if clicked:
             with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
                 vs = build_vectorstore(uploaded)
                 st.session_state.vectorstore = vs
                 st.session_state.chain = create_chain(vs)
             st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
+
+        # ===== 重置知识库 =====
+        if reset_clicked:
+            st.session_state.pop("vectorstore", None)
+            st.session_state.pop("chain", None)
+            chain = st.session_state.get("chain")
+            if chain and getattr(chain, "memory", None):
+                try:
+                    chain.memory.clear()
+                except Exception:
+                    pass
+            st.info("知识库已重置，请重新构建后再提问。" if is_zh else "Knowledge base has been reset. Please rebuild before asking questions.")
 
     # —— 关键改动：无论是否已建库，都先渲染历史，然后渲染一个输入框
     has_chain = st.session_state.get("chain") is not None
