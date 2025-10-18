@@ -35,16 +35,9 @@ if "db_inited" not in st.session_state:
     st.session_state.db_inited = False
     
 def apply_chat_input_visibility():
-    """根据当前页面与是否已创建 chain 决定是否显示底部 st.chat_input。"""
+    """General Chat 与 Contract Chat 都显示 chat_input；其它页面隐藏。"""
     page = st.session_state.get("page", "offline")
-
-    show = False
-    if page == "offline":
-        show = True
-    elif page == "chat" and st.session_state.get("chain") is not None:
-        # 只有知识库构建好（chain 存在）才显示
-        show = True
-
+    show = (page == "offline") or (page == "chat")
     st.markdown(
         f"""
         <style>
@@ -468,6 +461,80 @@ apply_chat_input_visibility()
 
 # ========================= PAGES（单文件内切换） =========================
 
+# # --- Contract Chat ---
+# if st.session_state.page == "chat":
+#     is_zh = st.session_state.lang == "zh"
+#     st.title("租客聊天助手" if is_zh else "Tenant Chatbot Assistant")
+#     st.caption("基于已上传的租赁合同进行问答" if is_zh else "Contract-aware Q&A using uploaded tenancy documents.")
+
+#     uploaded = st.file_uploader(
+#         "上传租赁合同或房屋守则（PDF）" if is_zh else "Upload PDF contracts or house rules",
+#         type="pdf", accept_multiple_files=True
+#     )
+#     if uploaded:
+#         build_disabled = not bool(os.getenv("OPENAI_API_KEY"))
+#         clicked = st.button(
+#             "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
+#             disabled=build_disabled,
+#             help=("请先设置 OPENAI_API_KEY" if build_disabled else "根据 PDF 构建 FAISS 索引") if is_zh else
+#                  ("Set OPENAI_API_KEY first" if build_disabled else "Build FAISS index from PDFs"),
+#         )
+#         if clicked:
+#             with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
+#                 vs = build_vectorstore(uploaded)
+#                 st.session_state.vectorstore = vs
+#                 st.session_state.chain = create_chain(vs)
+#             st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
+
+#     if "chain" in st.session_state:
+#         for m in st.session_state.online_msgs:
+#             with st.chat_message(m["role"]):
+#                 if m.get("ts"):
+#                     st.caption(m["ts"])
+#                 st.markdown(m["content"])
+#         user_q = st.chat_input("就你的合同提问…" if is_zh else "Ask about your contract…")
+#         if user_q:
+#             ts_user = now_ts()
+#             st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
+#             with st.chat_message("user"):
+#                 st.caption(ts_user)
+#                 st.markdown(user_q)
+
+#             smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
+#             if smalltalk is not None:
+#                 final_md = smalltalk
+#             else:
+#                 with st.spinner("正在回答…" if is_zh else "Answering…"):
+#                     try:
+#                         system_hint = (
+#                             "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
+#                             if is_zh else
+#                             "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents. "
+#                             "If the answer isn't present in the documents, say you don't have enough information."
+#                         )
+#                         query = f"{system_hint}\nQuestion: {user_q}"
+#                         resp = st.session_state.chain.invoke({"question": query})
+#                         final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
+#                     except Exception as e:
+#                         msg = str(e)
+#                         if "insufficient_quota" in msg or "429" in msg:
+#                             final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
+#                         elif "401" in msg or "invalid_api_key" in msg.lower():
+#                             final_md = "（API Key 无效）" if is_zh else "Invalid API key."
+#                         else:
+#                             final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
+
+#             ts_ans = now_ts()
+#             st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
+#             with st.chat_message("assistant"):
+#                 st.caption(ts_ans)
+#                 st.markdown(final_md)
+#     else:
+#         st.info(
+#             "设置 API Key 并构建知识库后开始提问。" if is_zh
+#             else "Set your API key and build the knowledge base to start asking questions."
+#         )
+
 # --- Contract Chat ---
 if st.session_state.page == "chat":
     is_zh = st.session_state.lang == "zh"
@@ -483,8 +550,8 @@ if st.session_state.page == "chat":
         clicked = st.button(
             "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
             disabled=build_disabled,
-            help=("请先设置 OPENAI_API_KEY" if build_disabled else "根据 PDF 构建 FAISS 索引") if is_zh else
-                 ("Set OPENAI_API_KEY first" if build_disabled else "Build FAISS index from PDFs"),
+            help=( "请先设置 OPENAI_API_KEY" if build_disabled else "根据 PDF 构建 FAISS 索引" )
+                 if is_zh else ( "Set OPENAI_API_KEY first" if build_disabled else "Build FAISS index from PDFs" ),
         )
         if clicked:
             with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
@@ -493,50 +560,59 @@ if st.session_state.page == "chat":
                 st.session_state.chain = create_chain(vs)
             st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
 
-    if "chain" in st.session_state:
-        for m in st.session_state.online_msgs:
-            with st.chat_message(m["role"]):
-                if m.get("ts"):
-                    st.caption(m["ts"])
-                st.markdown(m["content"])
-        user_q = st.chat_input("就你的合同提问…" if is_zh else "Ask about your contract…")
-        if user_q:
-            ts_user = now_ts()
-            st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
-            with st.chat_message("user"):
-                st.caption(ts_user)
-                st.markdown(user_q)
+    # —— 关键改动：无论是否已建库，都先渲染历史，然后渲染一个输入框
+    has_chain = st.session_state.get("chain") is not None
 
-            smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
-            if smalltalk is not None:
-                final_md = smalltalk
-            else:
-                with st.spinner("正在回答…" if is_zh else "Answering…"):
-                    try:
-                        system_hint = (
-                            "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
-                            if is_zh else
-                            "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents. "
-                            "If the answer isn't present in the documents, say you don't have enough information."
-                        )
-                        query = f"{system_hint}\nQuestion: {user_q}"
-                        resp = st.session_state.chain.invoke({"question": query})
-                        final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
-                    except Exception as e:
-                        msg = str(e)
-                        if "insufficient_quota" in msg or "429" in msg:
-                            final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
-                        elif "401" in msg or "invalid_api_key" in msg.lower():
-                            final_md = "（API Key 无效）" if is_zh else "Invalid API key."
-                        else:
-                            final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
+    # 历史消息（有就显示）
+    for m in st.session_state.get("online_msgs", []):
+        with st.chat_message(m["role"]):
+            if m.get("ts"):
+                st.caption(m["ts"])
+            st.markdown(m["content"])
 
-            ts_ans = now_ts()
-            st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
-            with st.chat_message("assistant"):
-                st.caption(ts_ans)
-                st.markdown(final_md)
-    else:
+    # 输入框：未建库时禁用并提示；建库后可用
+    ph_ready = "就你的合同提问…" if is_zh else "Ask about your contract…"
+    ph_build = "请先构建知识库…" if is_zh else "Build the knowledge base first…"
+    user_q = st.chat_input(ph_ready if has_chain else ph_build, disabled=not has_chain)
+
+    if has_chain and user_q:
+        ts_user = now_ts()
+        st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
+        with st.chat_message("user"):
+            st.caption(ts_user)
+            st.markdown(user_q)
+
+        smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
+        if smalltalk is not None:
+            final_md = smalltalk
+        else:
+            with st.spinner("正在回答…" if is_zh else "Answering…"):
+                try:
+                    system_hint = (
+                        "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
+                        if is_zh else
+                        "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents. "
+                        "If the answer isn't present in the documents, say you don't have enough information."
+                    )
+                    query = f"{system_hint}\nQuestion: {user_q}"
+                    resp = st.session_state.chain.invoke({"question": query})
+                    final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
+                except Exception as e:
+                    msg = str(e)
+                    if "insufficient_quota" in msg or "429" in msg:
+                        final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
+                    elif "401" in msg or "invalid_api_key" in msg.lower():
+                        final_md = "（API Key 无效）" if is_zh else "Invalid API key."
+                    else:
+                        final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
+
+        ts_ans = now_ts()
+        st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
+        with st.chat_message("assistant"):
+            st.caption(ts_ans)
+            st.markdown(final_md)
+
+    if not has_chain:
         st.info(
             "设置 API Key 并构建知识库后开始提问。" if is_zh
             else "Set your API key and build the knowledge base to start asking questions."
