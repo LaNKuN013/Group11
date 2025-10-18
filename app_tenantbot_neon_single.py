@@ -95,6 +95,36 @@ def get_db_conn():
         keepalives_count=5,
         cursor_factory=lazy_import_psycopg()[1].DictCursor,  # psycopg2_extras.DictCursor
     )
+    
+# --- add: ensure tables exist, without any UI ---
+def ensure_schema(conn):
+    with conn.cursor() as cur:
+        # repair_tickets
+        cur.execute("SELECT to_regclass('public.repair_tickets');")
+        exists = cur.fetchone()[0] is not None
+        if not exists:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS repair_tickets (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+
+        # rent_reminders
+        cur.execute("SELECT to_regclass('public.rent_reminders');")
+        exists = cur.fetchone()[0] is not None
+        if not exists:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rent_reminders (
+                    id SERIAL PRIMARY KEY,
+                    day_of_month INT NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
+                    note TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
 
 def init_db():
     psycopg2, _ = lazy_import_psycopg()
@@ -122,6 +152,7 @@ def init_db():
 
 def create_ticket(title: str, desc: str):
     with get_db_conn() as conn:
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
@@ -131,6 +162,7 @@ def create_ticket(title: str, desc: str):
 
 def list_tickets(limit: int = 50):
     with get_db_conn() as conn:
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, title, status, description, created_at
@@ -142,11 +174,13 @@ def list_tickets(limit: int = 50):
 
 def clear_tickets():
     with get_db_conn() as conn:
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
 
 def create_reminder(day_of_month: int, note: str):
     with get_db_conn() as conn:
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
@@ -156,6 +190,7 @@ def create_reminder(day_of_month: int, note: str):
 
 def list_reminders(limit: int = 20):
     with get_db_conn() as conn:
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, day_of_month, note, created_at
@@ -167,6 +202,7 @@ def list_reminders(limit: int = 20):
 
 def clear_reminders():
     with get_db_conn() as conn:
+        ensure_schema(conn)                     # <— add
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE rent_reminders RESTART IDENTITY;")
 
@@ -330,6 +366,77 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# with st.sidebar:
+#     st.header("🌐 Language / 语言")
+#     lang_choice = st.radio(
+#         "Select language / 选择语言",
+#         options=["English", "中文"],
+#         index=0 if st.session_state.get("lang", "en") == "en" else 1,
+#     )
+#     st.session_state.lang = "en" if lang_choice == "English" else "zh"
+
+#     if st.session_state.lang == "en":
+#         btn_general = "💬 General Chat"
+#         btn_contract = "💬 Contract Chat"
+#         btn_ticket = "🧰 Create Repair Ticket"
+#         btn_reminder = "💰 Create Rent Reminder"
+#         caption_text = "Upload PDFs anytime. Build the knowledge base after setting OPENAI_API_KEY below."
+#         api_expander_label = "API Setup (for Contract Chat)"
+#         api_hint = "API key set for this session."
+#         clear_label = "🧹 Clear Chat"
+#         clear_success = "All chat history cleared."
+#     else:
+#         btn_general = "💬 普通聊天"
+#         btn_contract = "💬 合同问答"
+#         btn_ticket = "🧰 报修创建"
+#         btn_reminder = "💰 房租提醒"
+#         caption_text = "可随时上传 PDF。先在下方设置 OPENAI_API_KEY 再构建知识库。"
+#         api_expander_label = "API 设置（用于合同问答）"
+#         api_hint = "API 密钥已设置。"
+#         clear_label = "🧹 清空聊天"
+#         clear_success = "所有聊天记录已清空。"
+
+#     # 导航按钮（切换而不触发重型导入）
+#     if st.button(btn_general, use_container_width=True): st.session_state.page = "offline"
+#     if st.button(btn_contract, use_container_width=True): st.session_state.page = "chat"
+#     if st.button(btn_ticket, use_container_width=True): st.session_state.page = "ticket"
+#     if st.button(btn_reminder, use_container_width=True): st.session_state.page = "reminder"
+
+#     with st.expander(api_expander_label):
+#         api_key_in = st.text_input("OpenAI API Key", type="password")
+#         if api_key_in:
+#             os.environ["OPENAI_API_KEY"] = api_key_in
+#             st.success(api_hint)
+
+#     st.caption(caption_text)
+#     st.divider()
+
+#     # 诊断：改成**按钮触发**，避免冷启动阻塞
+#     with st.expander("🧪 Diagnostics (on-demand)"):
+#         if st.button("Test Neon connection"):
+#             try:
+#                 with get_db_conn() as conn:
+#                     with conn.cursor() as cur:
+#                         cur.execute("SELECT NOW();")
+#                 st.success("DB connected ✔️")
+#             except Exception as e:
+#                 st.error(f"DB connect failed: {e}")
+#         st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
+
+#     if st.button(clear_label, use_container_width=True):
+#         st.session_state.offline_msgs.clear()
+#         st.session_state.online_msgs.clear()
+#         st.session_state.pop("vectorstore", None)
+#         st.session_state.pop("chain", None)
+#         chain = st.session_state.get("chain")
+#         if chain and getattr(chain, "memory", None):
+#             try:
+#                 chain.memory.clear()
+#             except Exception:
+#                 pass
+#         st.success(clear_success)
+#         st.rerun()
+
 with st.sidebar:
     st.header("🌐 Language / 语言")
     lang_choice = st.radio(
@@ -360,33 +467,20 @@ with st.sidebar:
         clear_label = "🧹 清空聊天"
         clear_success = "所有聊天记录已清空。"
 
-    # 导航按钮（切换而不触发重型导入）
+    # 导航按钮
     if st.button(btn_general, use_container_width=True): st.session_state.page = "offline"
     if st.button(btn_contract, use_container_width=True): st.session_state.page = "chat"
     if st.button(btn_ticket, use_container_width=True): st.session_state.page = "ticket"
     if st.button(btn_reminder, use_container_width=True): st.session_state.page = "reminder"
 
+    # --- API Setup ---
     with st.expander(api_expander_label):
         api_key_in = st.text_input("OpenAI API Key", type="password")
         if api_key_in:
             os.environ["OPENAI_API_KEY"] = api_key_in
             st.success(api_hint)
 
-    st.caption(caption_text)
-    st.divider()
-
-    # 诊断：改成**按钮触发**，避免冷启动阻塞
-    with st.expander("🧪 Diagnostics (on-demand)"):
-        if st.button("Test Neon connection"):
-            try:
-                with get_db_conn() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("SELECT NOW();")
-                st.success("DB connected ✔️")
-            except Exception as e:
-                st.error(f"DB connect failed: {e}")
-        st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
-
+    # ✅ 把 Clear Chat 放到 API Setup 下面（Diagnostics 之前）
     if st.button(clear_label, use_container_width=True):
         st.session_state.offline_msgs.clear()
         st.session_state.online_msgs.clear()
@@ -400,6 +494,21 @@ with st.sidebar:
                 pass
         st.success(clear_success)
         st.rerun()
+
+    st.caption(caption_text)
+    st.divider()
+
+    # --- Diagnostics（留在最后）---
+    with st.expander("🧪 Diagnostics (on-demand)"):
+        if st.button("Test Neon connection"):
+            try:
+                with get_db_conn() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT NOW();")
+                st.success("DB connected ✔️")
+            except Exception as e:
+                st.error(f"DB connect failed: {e}")
+        st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
 
 # ========================= PAGES（单文件内切换） =========================
 
@@ -482,14 +591,6 @@ elif st.session_state.page == "ticket":
     is_zh = st.session_state.lang == "zh"
     st.title("🧰 创建报修工单" if is_zh else "🧰 Create Repair Ticket")
 
-    with st.expander("初始化数据库（首次点击）" if is_zh else "Initialize Database (first time)"):
-        if st.button("运行 init_db()" if is_zh else "Run init_db()"):
-            try:
-                init_db()
-                st.success("数据库已就绪！" if is_zh else "DB ready!")
-            except Exception as e:
-                st.error(f"DB init failed: {e}")
-
     with st.form("ticket_form", clear_on_submit=True):
         t_title = st.text_input("问题标题" if is_zh else "Issue title",
                                 placeholder="厨房水槽漏水" if is_zh else "Leaking sink in kitchen")
@@ -535,13 +636,6 @@ elif st.session_state.page == "ticket":
 elif st.session_state.page == "reminder":
     is_zh = st.session_state.lang == "zh"
     st.title("💰 创建房租提醒" if is_zh else "💰 Create Rent Reminder")
-
-    with st.expander("初始化数据库（首次点击）" if is_zh else "Initialize Database (first time)"):
-        if st.button("运行 init_db()" if is_zh else "Run init_db()"):
-            try:
-                init_db(); st.success("数据库已就绪！" if is_zh else "DB ready!")
-            except Exception as e:
-                st.error(f"DB init failed: {e}")
 
     with st.form("reminder_form", clear_on_submit=True):
         r_day  = st.number_input("每月几号" if is_zh else "Due day of month", 1, 31, 1)
