@@ -493,8 +493,7 @@ with st.sidebar:
             except Exception:
                 pass
         st.success(clear_success)
-        st.toast(clear_success)
-        st.rerun()
+        # st.rerun()
 
     st.caption(caption_text)
     st.divider()
