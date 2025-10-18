@@ -141,24 +141,42 @@ def list_reminders(limit: int = 20):
         )
         return cur.fetchall()
     
+# ===============================
+# Streamlit Setup
+# ===============================
+st.set_page_config(page_title="Tenant Chatbot", page_icon="🤖", layout="wide")
 
-
-# ---------- Page config ----------
-st.set_page_config(
-    page_title="Tenant Chatbot",
-    page_icon="🤖",
-    layout="wide",
-)
-
-st.markdown(
-    """
+st.markdown("""
 <style>
-.sidebar-btn {width:100%; text-align:left; background:#e3f2fd; border:none; padding:0.5rem 1rem; border-radius:0.5rem; margin:0.2rem 0;}
+.sidebar-btn {
+    width:100%;
+    text-align:left;
+    background:#e3f2fd;
+    border:none;
+    padding:0.5rem 1rem;
+    border-radius:0.5rem;
+    margin:0.2rem 0;
+}
 .sidebar-btn:hover {background:#bbdefb;}
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
+
+# # ---------- Page config ----------
+# st.set_page_config(
+#     page_title="Tenant Chatbot",
+#     page_icon="🤖",
+#     layout="wide",
+# )
+
+# st.markdown(
+#     """
+# <style>
+# .sidebar-btn {width:100%; text-align:left; background:#e3f2fd; border:none; padding:0.5rem 1rem; border-radius:0.5rem; margin:0.2rem 0;}
+# .sidebar-btn:hover {background:#bbdefb;}
+# </style>
+# """,
+#     unsafe_allow_html=True,
+# )
 
 # ---------- Init DB (once) ----------
 try:
