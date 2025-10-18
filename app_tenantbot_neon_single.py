@@ -426,20 +426,47 @@ with st.sidebar:
             os.environ["OPENAI_API_KEY"] = api_key_in
             st.success(api_hint)
 
-    # ✅ 把 Clear Chat 放到 API Setup 下面（Diagnostics 之前）
-    if st.button(clear_label, use_container_width=True):
-        st.session_state.offline_msgs.clear()
-        st.session_state.online_msgs.clear()
+    # # ✅ 把 Clear Chat 放到 API Setup 下面（Diagnostics 之前）
+    # if st.button(clear_label, use_container_width=True):
+    #     st.session_state.offline_msgs.clear()
+    #     st.session_state.online_msgs.clear()
+    #     st.session_state.pop("vectorstore", None)
+    #     st.session_state.pop("chain", None)
+    #     chain = st.session_state.get("chain")
+    #     if chain and getattr(chain, "memory", None):
+    #         try:
+    #             chain.memory.clear()
+    #         except Exception:
+    #             pass
+    #     st.success(clear_success)
+    #     # st.rerun()
+
+    # st.caption(caption_text)
+    # st.divider()
+    
+    # ✅ Clear Chat：只清对话，不清知识库
+    if st.button(clear_label, use_container_width=True, key="btn_clear_chat"):
+        # 清空对话历史
+        st.session_state.offline_msgs = []
+        st.session_state.online_msgs = []
+        # 不要动向量库/链，避免合同页输入框被禁用
+        st.success(clear_success)
+    
+    # （可选）单独的“重置知识库”按钮
+    reset_kb_label = "♻️ Reset Knowledge Base" if st.session_state.lang != "zh" else "♻️ 重置知识库"
+    if st.button(reset_kb_label, use_container_width=True, key="btn_reset_kb"):
         st.session_state.pop("vectorstore", None)
         st.session_state.pop("chain", None)
+        # 若用了链的 memory，可安全清一次
         chain = st.session_state.get("chain")
         if chain and getattr(chain, "memory", None):
             try:
                 chain.memory.clear()
             except Exception:
                 pass
-        st.success(clear_success)
-        # st.rerun()
+        st.success("Knowledge base reset. Build it again to ask questions." 
+                   if st.session_state.lang != "zh" 
+                   else "知识库已重置，请重新构建后再提问。")
 
     st.caption(caption_text)
     st.divider()
