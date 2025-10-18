@@ -150,9 +150,69 @@ def init_db():
     st.session_state.db_inited = True
     return True
 
+# def create_ticket(title: str, desc: str):
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)                     # <— add
+#         with conn.cursor() as cur:
+#             cur.execute(
+#                 "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
+#                 (title, desc, "open"),
+#             )
+#             return cur.fetchone()["id"]
+
+# def list_tickets(limit: int = 50):
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)                     # <— add
+#         with conn.cursor() as cur:
+#             cur.execute("""
+#                 SELECT id, title, status, description, created_at
+#                 FROM repair_tickets
+#                 ORDER BY id DESC
+#                 LIMIT %s;
+#             """, (limit,))
+#             return cur.fetchall()
+
+# def clear_tickets():
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)                     # <— add
+#         with conn.cursor() as cur:
+#             cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
+
+# def create_reminder(day_of_month: int, note: str):
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)                     # <— add
+#         with conn.cursor() as cur:
+#             cur.execute(
+#                 "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
+#                 (day_of_month, note),
+#             )
+#             return cur.fetchone()["id"]
+
+# def list_reminders(limit: int = 20):
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)                     # <— add
+#         with conn.cursor() as cur:
+#             cur.execute("""
+#                 SELECT id, day_of_month, note, created_at
+#                 FROM rent_reminders
+#                 ORDER BY id DESC
+#                 LIMIT %s;
+#             """, (limit,))
+#             return cur.fetchall()
+
+# def clear_reminders():
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)                     # <— add
+#         with conn.cursor() as cur:
+#             cur.execute("TRUNCATE TABLE rent_reminders RESTART IDENTITY;")
+
 def create_ticket(title: str, desc: str):
     with get_db_conn() as conn:
-        ensure_schema(conn)                     # <— add
+        # 仅首次确保建表
+        if not st.session_state.get("db_checked"):
+            ensure_schema(conn)
+            st.session_state.db_checked = True
+
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
@@ -160,9 +220,13 @@ def create_ticket(title: str, desc: str):
             )
             return cur.fetchone()["id"]
 
+
 def list_tickets(limit: int = 50):
     with get_db_conn() as conn:
-        ensure_schema(conn)                     # <— add
+        if not st.session_state.get("db_checked"):
+            ensure_schema(conn)
+            st.session_state.db_checked = True
+
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, title, status, description, created_at
@@ -172,15 +236,23 @@ def list_tickets(limit: int = 50):
             """, (limit,))
             return cur.fetchall()
 
+
 def clear_tickets():
     with get_db_conn() as conn:
-        ensure_schema(conn)                     # <— add
+        if not st.session_state.get("db_checked"):
+            ensure_schema(conn)
+            st.session_state.db_checked = True
+
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
 
+
 def create_reminder(day_of_month: int, note: str):
     with get_db_conn() as conn:
-        ensure_schema(conn)                     # <— add
+        if not st.session_state.get("db_checked"):
+            ensure_schema(conn)
+            st.session_state.db_checked = True
+
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
@@ -188,9 +260,13 @@ def create_reminder(day_of_month: int, note: str):
             )
             return cur.fetchone()["id"]
 
+
 def list_reminders(limit: int = 20):
     with get_db_conn() as conn:
-        ensure_schema(conn)                     # <— add
+        if not st.session_state.get("db_checked"):
+            ensure_schema(conn)
+            st.session_state.db_checked = True
+
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, day_of_month, note, created_at
@@ -200,9 +276,13 @@ def list_reminders(limit: int = 20):
             """, (limit,))
             return cur.fetchall()
 
+
 def clear_reminders():
     with get_db_conn() as conn:
-        ensure_schema(conn)                     # <— add
+        if not st.session_state.get("db_checked"):
+            ensure_schema(conn)
+            st.session_state.db_checked = True
+
         with conn.cursor() as cur:
             cur.execute("TRUNCATE TABLE rent_reminders RESTART IDENTITY;")
 
