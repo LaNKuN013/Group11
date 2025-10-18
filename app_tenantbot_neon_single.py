@@ -49,6 +49,10 @@ def apply_chat_input_visibility():
         unsafe_allow_html=True,
     )
 
+def clear_chat_history():
+    """清空所有会话记录（在线/离线）"""
+    st.session_state.offline_msgs = []
+    st.session_state.online_msgs = []
 
 # =============== LAZY IMPORT HELPERS (关键) ===================
 def lazy_import_psycopg():
@@ -425,24 +429,6 @@ with st.sidebar:
         if api_key_in:
             os.environ["OPENAI_API_KEY"] = api_key_in
             st.success(api_hint)
-
-    # # ✅ 把 Clear Chat 放到 API Setup 下面（Diagnostics 之前）
-    # if st.button(clear_label, use_container_width=True):
-    #     st.session_state.offline_msgs.clear()
-    #     st.session_state.online_msgs.clear()
-    #     st.session_state.pop("vectorstore", None)
-    #     st.session_state.pop("chain", None)
-    #     chain = st.session_state.get("chain")
-    #     if chain and getattr(chain, "memory", None):
-    #         try:
-    #             chain.memory.clear()
-    #         except Exception:
-    #             pass
-    #     st.success(clear_success)
-    #     # st.rerun()
-
-    # st.caption(caption_text)
-    # st.divider()
     
     # ✅ Clear Chat：只清对话，不清知识库
     if st.button(clear_label, use_container_width=True, key="btn_clear_chat"):
@@ -451,37 +437,9 @@ with st.sidebar:
         st.session_state.online_msgs = []
         # 不要动向量库/链，避免合同页输入框被禁用
         st.success(clear_success)
-    
-    # （可选）单独的“重置知识库”按钮
-    # reset_kb_label = "♻️ Reset Knowledge Base" if st.session_state.lang != "zh" else "♻️ 重置知识库"
-    # if st.button(reset_kb_label, use_container_width=True, key="btn_reset_kb"):
-    #     st.session_state.pop("vectorstore", None)
-    #     st.session_state.pop("chain", None)
-    #     # 若用了链的 memory，可安全清一次
-    #     chain = st.session_state.get("chain")
-    #     if chain and getattr(chain, "memory", None):
-    #         try:
-    #             chain.memory.clear()
-    #         except Exception:
-    #             pass
-    #     st.success("Knowledge base reset. Build it again to ask questions." 
-    #                if st.session_state.lang != "zh" 
-    #                else "知识库已重置，请重新构建后再提问。")
 
     st.caption(caption_text)
     st.divider()
-
-    # # --- Diagnostics（留在最后）---
-    # with st.expander("🧪 Diagnostics (on-demand)"):
-    #     if st.button("Test Neon connection"):
-    #         try:
-    #             with get_db_conn() as conn:
-    #                 with conn.cursor() as cur:
-    #                     cur.execute("SELECT NOW();")
-    #             st.success("DB connected ✔️")
-    #         except Exception as e:
-    #             st.error(f"DB connect failed: {e}")
-    #     st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
     
     # --- Diagnostics（留在最后）---
     if st.session_state.lang == "zh":
@@ -514,80 +472,6 @@ apply_chat_input_visibility()
 
 # ========================= PAGES（单文件内切换） =========================
 
-# # --- Contract Chat ---
-# if st.session_state.page == "chat":
-#     is_zh = st.session_state.lang == "zh"
-#     st.title("租客聊天助手" if is_zh else "Tenant Chatbot Assistant")
-#     st.caption("基于已上传的租赁合同进行问答" if is_zh else "Contract-aware Q&A using uploaded tenancy documents.")
-
-#     uploaded = st.file_uploader(
-#         "上传租赁合同或房屋守则（PDF）" if is_zh else "Upload PDF contracts or house rules",
-#         type="pdf", accept_multiple_files=True
-#     )
-#     if uploaded:
-#         build_disabled = not bool(os.getenv("OPENAI_API_KEY"))
-#         clicked = st.button(
-#             "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
-#             disabled=build_disabled,
-#             help=("请先设置 OPENAI_API_KEY" if build_disabled else "根据 PDF 构建 FAISS 索引") if is_zh else
-#                  ("Set OPENAI_API_KEY first" if build_disabled else "Build FAISS index from PDFs"),
-#         )
-#         if clicked:
-#             with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
-#                 vs = build_vectorstore(uploaded)
-#                 st.session_state.vectorstore = vs
-#                 st.session_state.chain = create_chain(vs)
-#             st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
-
-#     if "chain" in st.session_state:
-#         for m in st.session_state.online_msgs:
-#             with st.chat_message(m["role"]):
-#                 if m.get("ts"):
-#                     st.caption(m["ts"])
-#                 st.markdown(m["content"])
-#         user_q = st.chat_input("就你的合同提问…" if is_zh else "Ask about your contract…")
-#         if user_q:
-#             ts_user = now_ts()
-#             st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
-#             with st.chat_message("user"):
-#                 st.caption(ts_user)
-#                 st.markdown(user_q)
-
-#             smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
-#             if smalltalk is not None:
-#                 final_md = smalltalk
-#             else:
-#                 with st.spinner("正在回答…" if is_zh else "Answering…"):
-#                     try:
-#                         system_hint = (
-#                             "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
-#                             if is_zh else
-#                             "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents. "
-#                             "If the answer isn't present in the documents, say you don't have enough information."
-#                         )
-#                         query = f"{system_hint}\nQuestion: {user_q}"
-#                         resp = st.session_state.chain.invoke({"question": query})
-#                         final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
-#                     except Exception as e:
-#                         msg = str(e)
-#                         if "insufficient_quota" in msg or "429" in msg:
-#                             final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
-#                         elif "401" in msg or "invalid_api_key" in msg.lower():
-#                             final_md = "（API Key 无效）" if is_zh else "Invalid API key."
-#                         else:
-#                             final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
-
-#             ts_ans = now_ts()
-#             st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
-#             with st.chat_message("assistant"):
-#                 st.caption(ts_ans)
-#                 st.markdown(final_md)
-#     else:
-#         st.info(
-#             "设置 API Key 并构建知识库后开始提问。" if is_zh
-#             else "Set your API key and build the knowledge base to start asking questions."
-#         )
-
 # --- Contract Chat ---
 if st.session_state.page == "chat":
     is_zh = st.session_state.lang == "zh"
@@ -598,20 +482,6 @@ if st.session_state.page == "chat":
         "上传租赁合同或房屋守则（PDF）" if is_zh else "Upload PDF contracts or house rules",
         type="pdf", accept_multiple_files=True
     )
-    # if uploaded:
-    #     build_disabled = not bool(os.getenv("OPENAI_API_KEY"))
-    #     clicked = st.button(
-    #         "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
-    #         disabled=build_disabled,
-    #         help=( "请先设置 OPENAI_API_KEY" if build_disabled else "根据 PDF 构建 FAISS 索引" )
-    #              if is_zh else ( "Set OPENAI_API_KEY first" if build_disabled else "Build FAISS index from PDFs" ),
-    #     )
-    #     if clicked:
-    #         with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
-    #             vs = build_vectorstore(uploaded)
-    #             st.session_state.vectorstore = vs
-    #             st.session_state.chain = create_chain(vs)
-    #         st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
         
     if uploaded:
         build_disabled = not bool(os.getenv("OPENAI_API_KEY"))
@@ -642,6 +512,7 @@ if st.session_state.page == "chat":
 
         # ===== 重置知识库 =====
         if reset_clicked:
+            # 1) 删知识库
             st.session_state.pop("vectorstore", None)
             st.session_state.pop("chain", None)
             chain = st.session_state.get("chain")
@@ -650,7 +521,16 @@ if st.session_state.page == "chat":
                     chain.memory.clear()
                 except Exception:
                     pass
-            st.info("知识库已重置，请重新构建后再提问。" if is_zh else "Knowledge base has been reset. Please rebuild before asking questions.")
+
+            # 2) 同时清空聊天记录
+            clear_chat_history()
+
+            # 3) 提示
+            st.info(
+                "知识库已重置，聊天记录已清空。请重新构建后再提问。"
+                if is_zh else
+                "Knowledge base reset and chat history cleared. Please rebuild before asking questions."
+            )
 
     # —— 关键改动：无论是否已建库，都先渲染历史，然后渲染一个输入框
     has_chain = st.session_state.get("chain") is not None
