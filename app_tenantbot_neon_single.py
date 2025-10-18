@@ -35,20 +35,27 @@ if "db_inited" not in st.session_state:
     st.session_state.db_inited = False
     
 def apply_chat_input_visibility():
-    """根据当前页面，立即显示/隐藏底部 st.chat_input 的容器。"""
-    show = st.session_state.get("page", "offline") == "offline"
-    css = f"""
-    <style>
-      div[data-testid='stChatInput'] {{
-        display: {"block" if show else "none"} !important;
-      }}
-    </style>
-    """
-    st.markdown(css, unsafe_allow_html=True)
+    """根据当前页面与是否已创建 chain 决定是否显示底部 st.chat_input。"""
+    page = st.session_state.get("page", "offline")
 
-def reserve_footer_space():
-    """非聊天页预留与 chat_input 相近的高度，减少切页跳动感。"""
-    st.markdown("<div style='height:64px'></div>", unsafe_allow_html=True)
+    show = False
+    if page == "offline":
+        show = True
+    elif page == "chat" and st.session_state.get("chain") is not None:
+        # 只有知识库构建好（chain 存在）才显示
+        show = True
+
+    st.markdown(
+        f"""
+        <style>
+          div[data-testid='stChatInput'] {{
+            display: {'block' if show else 'none'} !important;
+          }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 # =============== LAZY IMPORT HELPERS (关键) ===================
 def lazy_import_psycopg():
