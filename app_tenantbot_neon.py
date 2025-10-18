@@ -12,6 +12,7 @@ import os
 import tempfile
 import re
 from datetime import datetime
+from zoneinfo import ZoneInfo  # Python 3.9+
 import streamlit as st
 
 # ---------- Optional env loader ----------
@@ -310,8 +311,11 @@ def create_chain(vs):
 
 
 # ---------------------- Utilities ----------------------
+
 def now_ts(lang: str) -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    """Return current Singapore time formatted to seconds."""
+    tz = ZoneInfo("Asia/Singapore")
+    return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
 
 # ===== Small-talk helpers (shared) =====
 def normalize_word(word: str) -> str:
@@ -679,14 +683,30 @@ elif st.session_state.page == "ticket":
         st.error(f"DB read error: {e}")
 
     st.subheader(my_tickets)
+
+    # --- 清除历史报修按钮 ---
+    if st.button("🗑️ Clear All Tickets" if not is_zh else "🗑️ 清除所有报修记录"):
+        if st.confirm("Are you sure to delete ALL tickets?" if not is_zh else "确定要删除所有报修记录吗？"):
+            try:
+                conn = get_db_conn()
+                with conn, conn.cursor() as cur:
+                    cur.execute("DELETE FROM repair_tickets;")
+                st.success("All tickets deleted!" if not is_zh else "所有报修记录已删除！")
+                st.rerun()
+            except Exception as e:
+                st.error(f"DB delete error: {e}")
+
     if not rows:
         st.caption(empty_hint)
     else:
         for r in rows:
+            # Singapore-localized timestamp
+            created_local = r["created_at"].astimezone(ZoneInfo("Asia/Singapore"))
+            ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
             st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
             if r["description"]:
                 st.caption(r["description"])
-            st.caption(f"Created at: {r['created_at']}")
+            st.caption(f"Created at: {ts_str} (SGT)")
 
 # --- page: rent reminder ---
 elif st.session_state.page == "reminder":
@@ -730,13 +750,28 @@ elif st.session_state.page == "reminder":
         st.error(f"DB read error: {e}")
 
     st.subheader(current_title)
+
+    # --- 清除提醒按钮 ---
+    if st.button("🗑️ Clear All Reminders" if not is_zh else "🗑️ 清除所有提醒"):
+        if st.confirm("Are you sure to delete ALL reminders?" if not is_zh else "确定要删除所有提醒记录吗？"):
+            try:
+                conn = get_db_conn()
+                with conn, conn.cursor() as cur:
+                    cur.execute("DELETE FROM rent_reminders;")
+                st.success("All reminders deleted!" if not is_zh else "所有提醒已删除！")
+                st.rerun()
+            except Exception as e:
+                st.error(f"DB delete error: {e}")
+
     if not rows:
         st.caption(empty_hint)
     else:
         for r in rows:
+            created_local = r["created_at"].astimezone(ZoneInfo("Asia/Singapore"))
+            ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
             st.write(fmt_line.format(day=r["day_of_month"], note=r["note"] or "—"))
-            st.caption(f"Created at: {r['created_at']}")
-
+            st.caption(f"Created at: {ts_str} (SGT)")
+        
 # --- page: offline chat ---
 elif st.session_state.page == "offline":
     lang = st.session_state.get("lang", "en")
