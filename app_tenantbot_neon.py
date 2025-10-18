@@ -48,37 +48,45 @@ def get_db_conn():
     dsn = os.getenv("DATABASE_URL")
     if not dsn:
         raise RuntimeError("❌ DATABASE_URL not found. Please set it in Streamlit Secrets.")
-    if "sslmode=" not in dsn:
-        dsn += ("&" if "?" in dsn else "?") + "sslmode=require"
-    return psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+
+    # Neon sometimes needs persistent SSL parameters
+    conn = psycopg2.connect(
+        dsn,
+        sslmode="require",
+        connect_timeout=10,
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=5,
+        cursor_factory=RealDictCursor,
+    )
+    return conn
 
 def init_db():
     try:
         conn = get_db_conn()
-        cur = conn.cursor()
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS repair_tickets (
-            id SERIAL PRIMARY KEY,
-            title TEXT,
-            description TEXT,
-            status TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        );
-        CREATE TABLE IF NOT EXISTS rent_reminders (
-            id SERIAL PRIMARY KEY,
-            day INT,
-            note TEXT,
-            created_at TIMESTAMPTZ DEFAULT NOW()
-        );
-        """)
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS repair_tickets (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT,
+                    description TEXT,
+                    status TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
+                CREATE TABLE IF NOT EXISTS rent_reminders (
+                    id SERIAL PRIMARY KEY,
+                    day INT,
+                    note TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
+            """)
         conn.commit()
-        cur.close(); conn.close()
+        conn.close()
         return True
     except Exception as e:
-        st.error(f"DB init failed: {e}")
+        st.warning(f"⚠️ Database connection issue: {e}")
         return False
-
-DB_READY = init_db()
 
 # CRUD helpers
 
