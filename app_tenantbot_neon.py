@@ -15,6 +15,10 @@ from datetime import datetime
 from zoneinfo import ZoneInfo  # Python 3.9+
 import streamlit as st
 
+# ---------- Database (Neon/Postgres via psycopg2) ----------
+import psycopg2
+import psycopg2.extras
+
 # ---------- Optional env loader ----------
 try:
     from dotenv import load_dotenv
@@ -34,9 +38,7 @@ try:
 except Exception:
     LANGCHAIN_AVAILABLE = False
 
-# ---------- Database (Neon/Postgres via psycopg2) ----------
-import psycopg2
-import psycopg2.extras
+
 
 @st.cache_resource(show_spinner=False)
 def get_db_conn():
@@ -684,23 +686,31 @@ elif st.session_state.page == "ticket":
 
     st.subheader(my_tickets)
 
-    # === 清除历史报修（确认区） ===
-    with st.expander("🗑️ Clear All Tickets" if not is_zh else "🗑️ 清除所有报修记录"):
-        st.warning("Are you sure to delete ALL tickets? This action cannot be undone."
-                if not is_zh else "确定要删除所有报修记录吗？此操作无法撤销。")
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("✅ Yes, delete all" if not is_zh else "✅ 确认清空", key="confirm_del_tickets"):
-                try:
-                    conn = get_db_conn()
-                    with conn, conn.cursor() as cur:
-                        cur.execute("DELETE FROM repair_tickets;")
-                    st.success("All tickets deleted!" if not is_zh else "所有报修记录已删除！")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"DB delete error: {e}")
-        with c2:
-            st.button("Cancel" if not is_zh else "取消", key="cancel_del_tickets")
+    # —— 直接清空全部报修（无确认弹窗）——
+    if st.button("🗑️ Clear All Tickets" if not is_zh else "🗑️ 清除所有报修记录", key="clear_all_tickets"):
+        try:
+            from contextlib import closing
+            with closing(get_db_conn()) as conn:
+                with conn, conn.cursor() as cur:
+                    cur.execute("DELETE FROM repair_tickets;")
+            st.success("All tickets deleted!" if not is_zh else "所有报修记录已删除！")
+            st.rerun()
+        except Exception as e:
+            st.error(f"DB delete error: {e}")
+
+    # 列表
+    if not rows:
+        st.caption(empty_hint)
+    else:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("Asia/Singapore")
+        for r in rows:
+            created_local = r["created_at"].astimezone(tz)
+            ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
+            st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
+            if r["description"]:
+                st.caption(r["description"])
+            st.caption(f"Created at: {ts_str} (SGT)")
 
     # === 列表 ===
     if not rows:
@@ -760,36 +770,30 @@ elif st.session_state.page == "reminder":
 
     st.subheader(current_title)
 
-    # === 清除提醒（确认区） ===
-    with st.expander("🗑️ Clear All Reminders" if not is_zh else "🗑️ 清除所有提醒"):
-        st.warning("Are you sure to delete ALL reminders? This action cannot be undone."
-                if not is_zh else "确定要删除所有提醒吗？此操作无法撤销。")
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("✅ Yes, delete all" if not is_zh else "✅ 确认清空", key="confirm_del_reminders"):
-                try:
-                    conn = get_db_conn()
-                    with conn, conn.cursor() as cur:
-                        cur.execute("DELETE FROM rent_reminders;")
-                    st.success("All reminders deleted!" if not is_zh else "所有提醒已删除！")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"DB delete error: {e}")
-        with c2:
-            st.button("Cancel" if not is_zh else "取消", key="cancel_del_reminders")
+    # —— 直接清空全部提醒（无确认弹窗）——
+    if st.button("🗑️ Clear All Reminders" if not is_zh else "🗑️ 清除所有提醒", key="clear_all_reminders"):
+        try:
+            from contextlib import closing
+            with closing(get_db_conn()) as conn:
+                with conn, conn.cursor() as cur:
+                    cur.execute("DELETE FROM rent_reminders;")
+            st.success("All reminders deleted!" if not is_zh else "所有提醒已清空！")
+            st.rerun()
+        except Exception as e:
+            st.error(f"DB delete error: {e}")
 
-    # === 列表 ===
+    # 列表
     if not rows:
         st.caption(empty_hint)
     else:
+        from zoneinfo import ZoneInfo
         tz = ZoneInfo("Asia/Singapore")
         for r in rows:
             created_local = r["created_at"].astimezone(tz)
             ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
-
             st.write(fmt_line.format(day=r["day_of_month"], note=r["note"] or "—"))
             st.caption(f"Created at: {ts_str} (SGT)")
-        
+            
 # --- page: offline chat ---
 elif st.session_state.page == "offline":
     lang = st.session_state.get("lang", "en")
