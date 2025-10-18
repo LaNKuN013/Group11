@@ -14,13 +14,6 @@ import re
 from datetime import datetime
 import streamlit as st
 
-
-from datetime import datetime
-import pytz
-import psycopg2
-from psycopg2.extras import RealDictCursor
-
-
 # ---------- Optional env loader ----------
 try:
     from dotenv import load_dotenv
@@ -40,55 +33,52 @@ try:
 except Exception:
     LANGCHAIN_AVAILABLE = False
 
-# ===============================
-# Neon PostgreSQL Connection
-# ===============================
+# ---------- Database (Neon/Postgres via psycopg2) ----------
+import psycopg2
+import psycopg2.extras
+
 @st.cache_resource(show_spinner=False)
 def get_db_conn():
+    """Create a cached Postgres connection.
+    Priority: DATABASE_URL (with sslmode=require) → split env vars.
+    """
     dsn = os.getenv("DATABASE_URL")
-    if not dsn:
-        raise RuntimeError("❌ DATABASE_URL not found. Please set it in Streamlit Secrets.")
+    if dsn:
+        return psycopg2.connect(dsn)
+    host = os.getenv("PG_HOST")
+    db = os.getenv("PG_DB")
+    user = os.getenv("PG_USER")
+    pwd = os.getenv("PG_PASSWORD")
+    port = os.getenv("PG_PORT", "5432")
+    sslmode = os.getenv("PG_SSLMODE", "require")
+    return psycopg2.connect(host=host, database=db, user=user, password=pwd, port=port, sslmode=sslmode)
 
-    # Neon sometimes needs persistent SSL parameters
-    conn = psycopg2.connect(
-        dsn,
-        sslmode="require",
-        connect_timeout=10,
-        keepalives=1,
-        keepalives_idle=30,
-        keepalives_interval=10,
-        keepalives_count=5,
-        cursor_factory=RealDictCursor,
-    )
-    return conn
-
+@st.cache_resource(show_spinner=False)
 def init_db():
-    try:
-        conn = get_db_conn()
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS repair_tickets (
-                    id SERIAL PRIMARY KEY,
-                    title TEXT,
-                    description TEXT,
-                    status TEXT,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                );
-                CREATE TABLE IF NOT EXISTS rent_reminders (
-                    id SERIAL PRIMARY KEY,
-                    day INT,
-                    note TEXT,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                );
-            """)
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
-        st.warning(f"⚠️ Database connection issue: {e}")
-        return False
-
-DB_READY = init_db()
+    conn = get_db_conn()
+    with conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS repair_tickets (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                description TEXT,
+                status TEXT NOT NULL DEFAULT 'open',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rent_reminders (
+                id SERIAL PRIMARY KEY,
+                day_of_month INT NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
+                note TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+    return True
 
 # CRUD helpers
 
@@ -140,43 +130,23 @@ def list_reminders(limit: int = 20):
             (limit,),
         )
         return cur.fetchall()
-    
-# ===============================
-# Streamlit Setup
-# ===============================
-st.set_page_config(page_title="Tenant Chatbot", page_icon="🤖", layout="wide")
 
-st.markdown("""
+# ---------- Page config ----------
+st.set_page_config(
+    page_title="Tenant Chatbot",
+    page_icon="🤖",
+    layout="wide",
+)
+
+st.markdown(
+    """
 <style>
-.sidebar-btn {
-    width:100%;
-    text-align:left;
-    background:#e3f2fd;
-    border:none;
-    padding:0.5rem 1rem;
-    border-radius:0.5rem;
-    margin:0.2rem 0;
-}
+.sidebar-btn {width:100%; text-align:left; background:#e3f2fd; border:none; padding:0.5rem 1rem; border-radius:0.5rem; margin:0.2rem 0;}
 .sidebar-btn:hover {background:#bbdefb;}
 </style>
-""", unsafe_allow_html=True)
-
-# # ---------- Page config ----------
-# st.set_page_config(
-#     page_title="Tenant Chatbot",
-#     page_icon="🤖",
-#     layout="wide",
-# )
-
-# st.markdown(
-#     """
-# <style>
-# .sidebar-btn {width:100%; text-align:left; background:#e3f2fd; border:none; padding:0.5rem 1rem; border-radius:0.5rem; margin:0.2rem 0;}
-# .sidebar-btn:hover {background:#bbdefb;}
-# </style>
-# """,
-#     unsafe_allow_html=True,
-# )
+""",
+    unsafe_allow_html=True,
+)
 
 # ---------- Init DB (once) ----------
 try:
@@ -255,16 +225,16 @@ with st.sidebar:
     st.divider()
 
     # ====== Diagnostics ======
-    # Diagnostics
     with st.expander("🧪 Diagnostics"):
-        st.markdown(
-            f"""
-            **DB connected:** {'✅' if DB_READY else '❌'}  
-            **LangChain imports ok:** {LANGCHAIN_AVAILABLE}  
-            **API Key detected:** {bool(os.getenv("OPENAI_API_KEY"))}
-            """
-        )
-        
+        try:
+            conn = get_db_conn()
+            with conn.cursor() as cur:
+                cur.execute("SELECT NOW();")
+                st.success("DB connected ✔️")
+        except Exception as e:
+            st.error(f"DB connect failed: {e}")
+        st.write("LangChain imports ok:", LANGCHAIN_AVAILABLE)
+        st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
 
     # ====== Clear Chat ======
     if st.button(clear_label, use_container_width=True):
@@ -283,21 +253,6 @@ with st.sidebar:
                 pass
         st.success(clear_success)
         st.rerun()
-
-# ===============================
-# Timezone Helper (Singapore)
-# ===============================
-tz_sg = pytz.timezone("Asia/Singapore")
-
-def local_sg_time(ts):
-    if not ts:
-        return ""
-    if isinstance(ts, str):
-        return ts
-    return ts.astimezone(tz_sg).strftime("%Y-%m-%d %H:%M:%S")
-
-
-
 
 # --- core chat functions ---
 def build_vectorstore(uploaded_files):
@@ -675,243 +630,112 @@ if st.session_state.page == "chat":
             with st.chat_message("assistant"):
                 st.caption(ts_ans)
                 st.markdown(final_md)
-                
-# ===============================
-# Repair Ticket Page
-# ===============================
-elif st.session_state.page == "ticket":
-    lang = st.session_state.lang
-    conn = get_db_conn()
-    cur = conn.cursor()
 
-    if lang == "zh":
+# --- page: repair ticket ---
+elif st.session_state.page == "ticket":
+    is_zh = st.session_state.get("lang", "en") == "zh"
+    if is_zh:
         st.title("🧰 创建报修工单")
-        issue_label, issue_ph = "问题标题", "厨房水槽漏水"
-        desc_label, desc_ph = "问题描述", "请描述具体情况…"
-        submit_btn, created_ok = "📨 提交报修", "报修已创建！"
+        issue_label = "问题标题"
+        issue_ph = "厨房水槽漏水"
+        desc_label = "问题描述"
+        desc_ph = "请描述具体情况…"
+        submit_btn = "📨 提交报修"
+        created_ok = "报修已保存到数据库！"
         my_tickets = "我的报修工单"
-        clear_label = "🗑️ 清空所有报修"
-        confirm_label = "确认要清空所有报修吗？此操作无法撤销。"
-        confirm_btn, cancel_btn = "✅ 确认清空", "取消"
-        cleared_ok = "所有报修已清空！"
+        status_open = "进行中"
+        empty_hint = "暂无工单"
     else:
         st.title("🧰 Create Repair Ticket")
-        issue_label, issue_ph = "Issue title", "Leaking sink in kitchen"
-        desc_label, desc_ph = "Description", "Describe the issue…"
-        submit_btn, created_ok = "📨 Submit Ticket", "Ticket created!"
+        issue_label = "Issue title"
+        issue_ph = "Leaking sink in kitchen"
+        desc_label = "Description"
+        desc_ph = "Describe the issue…"
+        submit_btn = "📨 Submit Ticket"
+        created_ok = "Ticket saved to database!"
         my_tickets = "My Tickets"
-        clear_label = "🗑️ Clear All Tickets"
-        confirm_label = "Are you sure you want to delete all tickets? This action cannot be undone."
-        confirm_btn, cancel_btn = "✅ Yes, delete all", "Cancel"
-        cleared_ok = "All tickets cleared!"
+        status_open = "open"
+        empty_hint = "No tickets yet"
 
     with st.form("ticket_form", clear_on_submit=True):
         t_title = st.text_input(issue_label, placeholder=issue_ph)
         t_desc = st.text_area(desc_label, placeholder=desc_ph)
-        if st.form_submit_button(submit_btn) and t_title:
-            cur.execute("INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s)",
-                        (t_title, t_desc, "open"))
-            conn.commit()
-            st.success(created_ok)
+        submitted = st.form_submit_button(submit_btn)
+        if submitted:
+            if not t_title.strip():
+                st.warning("请填写问题标题。" if is_zh else "Please enter a title.")
+            else:
+                try:
+                    new_id = create_ticket(t_title.strip(), t_desc.strip())
+                    st.success(f"{created_ok}  (#{new_id})")
+                except Exception as e:
+                    st.error(f"DB error: {e}")
 
-    cur.execute("SELECT * FROM repair_tickets ORDER BY id DESC;")
-    rows = cur.fetchall()
+    # list
+    try:
+        rows = list_tickets()
+    except Exception as e:
+        rows = []
+        st.error(f"DB read error: {e}")
 
     st.subheader(my_tickets)
     if not rows:
-        st.caption("No tickets yet.")
+        st.caption(empty_hint)
     else:
         for r in rows:
             st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
             if r["description"]:
                 st.caption(r["description"])
-            st.caption(f"Created at (Singapore): {local_sg_time(r['created_at'])}")
+            st.caption(f"Created at: {r['created_at']}")
 
-    # --- Delete Confirmation ---
-    with st.expander(clear_label):
-        st.warning(confirm_label)
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(confirm_btn, type="primary"):
-                cur.execute("DELETE FROM repair_tickets;")
-                conn.commit()
-                st.success(cleared_ok)
-                st.experimental_rerun()
-        with col2:
-            st.button(cancel_btn)
-
-    cur.close(); conn.close()
-    
-# # --- page: repair ticket ---
-# elif st.session_state.page == "ticket":
-#     is_zh = st.session_state.get("lang", "en") == "zh"
-#     if is_zh:
-#         st.title("🧰 创建报修工单")
-#         issue_label = "问题标题"
-#         issue_ph = "厨房水槽漏水"
-#         desc_label = "问题描述"
-#         desc_ph = "请描述具体情况…"
-#         submit_btn = "📨 提交报修"
-#         created_ok = "报修已保存到数据库！"
-#         my_tickets = "我的报修工单"
-#         status_open = "进行中"
-#         empty_hint = "暂无工单"
-#     else:
-#         st.title("🧰 Create Repair Ticket")
-#         issue_label = "Issue title"
-#         issue_ph = "Leaking sink in kitchen"
-#         desc_label = "Description"
-#         desc_ph = "Describe the issue…"
-#         submit_btn = "📨 Submit Ticket"
-#         created_ok = "Ticket saved to database!"
-#         my_tickets = "My Tickets"
-#         status_open = "open"
-#         empty_hint = "No tickets yet"
-
-#     with st.form("ticket_form", clear_on_submit=True):
-#         t_title = st.text_input(issue_label, placeholder=issue_ph)
-#         t_desc = st.text_area(desc_label, placeholder=desc_ph)
-#         submitted = st.form_submit_button(submit_btn)
-#         if submitted:
-#             if not t_title.strip():
-#                 st.warning("请填写问题标题。" if is_zh else "Please enter a title.")
-#             else:
-#                 try:
-#                     new_id = create_ticket(t_title.strip(), t_desc.strip())
-#                     st.success(f"{created_ok}  (#{new_id})")
-#                 except Exception as e:
-#                     st.error(f"DB error: {e}")
-
-#     # list
-#     try:
-#         rows = list_tickets()
-#     except Exception as e:
-#         rows = []
-#         st.error(f"DB read error: {e}")
-
-#     st.subheader(my_tickets)
-#     if not rows:
-#         st.caption(empty_hint)
-#     else:
-#         for r in rows:
-#             st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
-#             if r["description"]:
-#                 st.caption(r["description"])
-#             st.caption(f"Created at: {r['created_at']}")
-
-# ===============================
-# Rent Reminder Page
-# ===============================
+# --- page: rent reminder ---
 elif st.session_state.page == "reminder":
-    lang = st.session_state.lang
-    conn = get_db_conn()
-    cur = conn.cursor()
-
-    if lang == "zh":
+    is_zh = st.session_state.get("lang", "en") == "zh"
+    if is_zh:
         st.title("💰 创建房租提醒")
-        day_label, note_label = "每月几号", "备注"
+        day_label = "每月几号"
+        note_label = "备注"
         note_ph = "通过银行卡尾号••1234转账"
-        save_btn, saved_ok = "💾 保存提醒", "提醒已保存！"
+        save_btn = "💾 保存提醒"
+        saved_ok = "提醒已保存到数据库！"
         current_title = "当前提醒"
-        clear_label = "🗑️ 清空所有提醒"
-        confirm_label = "确认要删除所有提醒吗？此操作无法撤销。"
-        confirm_btn, cancel_btn = "✅ 确认清空", "取消"
-        cleared_ok = "所有提醒已清空！"
-        every_month_on = "每月的第 **{day}** 天 — {note}"
+        fmt_line = "每月的第 **{day}** 天 — {note}"
+        empty_hint = "暂无提醒"
     else:
         st.title("💰 Create Rent Reminder")
-        day_label, note_label = "Due day of month", "Note"
+        day_label = "Due day of month"
+        note_label = "Note"
         note_ph = "Pay via bank transfer ending ••1234"
-        save_btn, saved_ok = "💾 Save Reminder", "Reminder saved!"
+        save_btn = "💾 Save Reminder"
+        saved_ok = "Reminder saved to database!"
         current_title = "Current Reminder"
-        clear_label = "🗑️ Clear All Reminders"
-        confirm_label = "Are you sure you want to delete all reminders? This action cannot be undone."
-        confirm_btn, cancel_btn = "✅ Yes, delete all", "Cancel"
-        cleared_ok = "All reminders cleared!"
-        every_month_on = "Every month on day **{day}** — {note}"
+        fmt_line = "Every month on day **{day}** — {note}"
+        empty_hint = "No reminders yet"
 
     with st.form("reminder_form", clear_on_submit=True):
         r_day = st.number_input(day_label, 1, 31, 1)
         r_note = st.text_input(note_label, placeholder=note_ph)
-        if st.form_submit_button(save_btn):
-            cur.execute("INSERT INTO rent_reminders (day, note) VALUES (%s, %s)", (r_day, r_note))
-            conn.commit()
-            st.success(saved_ok)
+        r_submit = st.form_submit_button(save_btn)
+        if r_submit:
+            try:
+                rid = create_reminder(int(r_day), (r_note or "").strip())
+                st.success(f"{saved_ok}  (#{rid})")
+            except Exception as e:
+                st.error(f"DB error: {e}")
 
-    cur.execute("SELECT * FROM rent_reminders ORDER BY id DESC;")
-    rows = cur.fetchall()
+    try:
+        rows = list_reminders()
+    except Exception as e:
+        rows = []
+        st.error(f"DB read error: {e}")
 
-    if rows:
-        st.subheader(current_title)
-        for r in rows:
-            st.write(every_month_on.format(day=r["day"], note=r["note"]))
-            st.caption(f"Created at (Singapore): {local_sg_time(r['created_at'])}")
+    st.subheader(current_title)
+    if not rows:
+        st.caption(empty_hint)
     else:
-        st.caption("No reminders yet.")
-
-    # --- Delete Confirmation ---
-    with st.expander(clear_label):
-        st.warning(confirm_label)
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(confirm_btn, type="primary"):
-                cur.execute("DELETE FROM rent_reminders;")
-                conn.commit()
-                st.success(cleared_ok)
-                st.experimental_rerun()
-        with col2:
-            st.button(cancel_btn)
-
-    cur.close(); conn.close()
-    
-# --- page: rent reminder ---
-# elif st.session_state.page == "reminder":
-#     is_zh = st.session_state.get("lang", "en") == "zh"
-#     if is_zh:
-#         st.title("💰 创建房租提醒")
-#         day_label = "每月几号"
-#         note_label = "备注"
-#         note_ph = "通过银行卡尾号••1234转账"
-#         save_btn = "💾 保存提醒"
-#         saved_ok = "提醒已保存到数据库！"
-#         current_title = "当前提醒"
-#         fmt_line = "每月的第 **{day}** 天 — {note}"
-#         empty_hint = "暂无提醒"
-#     else:
-#         st.title("💰 Create Rent Reminder")
-#         day_label = "Due day of month"
-#         note_label = "Note"
-#         note_ph = "Pay via bank transfer ending ••1234"
-#         save_btn = "💾 Save Reminder"
-#         saved_ok = "Reminder saved to database!"
-#         current_title = "Current Reminder"
-#         fmt_line = "Every month on day **{day}** — {note}"
-#         empty_hint = "No reminders yet"
-
-#     with st.form("reminder_form", clear_on_submit=True):
-#         r_day = st.number_input(day_label, 1, 31, 1)
-#         r_note = st.text_input(note_label, placeholder=note_ph)
-#         r_submit = st.form_submit_button(save_btn)
-#         if r_submit:
-#             try:
-#                 rid = create_reminder(int(r_day), (r_note or "").strip())
-#                 st.success(f"{saved_ok}  (#{rid})")
-#             except Exception as e:
-#                 st.error(f"DB error: {e}")
-
-#     try:
-#         rows = list_reminders()
-#     except Exception as e:
-#         rows = []
-#         st.error(f"DB read error: {e}")
-
-#     st.subheader(current_title)
-#     if not rows:
-#         st.caption(empty_hint)
-#     else:
-#         for r in rows:
-#             st.write(fmt_line.format(day=r["day_of_month"], note=r["note"] or "—"))
-#             st.caption(f"Created at: {r['created_at']}")
+        for r in rows:
+            st.write(fmt_line.format(day=r["day_of_month"], note=r["note"] or "—"))
+            st.caption(f"Created at: {r['created_at']}")
 
 # --- page: offline chat ---
 elif st.session_state.page == "offline":
