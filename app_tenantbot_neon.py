@@ -12,13 +12,13 @@ import os
 import tempfile
 import re
 from datetime import datetime
-from zoneinfo import ZoneInfo  # Python 3.9+
 import streamlit as st
 
 # ---------- Database (Neon/Postgres via psycopg2) ----------
 from contextlib import closing
 import psycopg2
 import psycopg2.extras
+
 
 # ---------- Optional env loader ----------
 try:
@@ -160,6 +160,15 @@ try:
     init_db()
 except Exception as e:
     st.sidebar.error(f"DB init failed: {e}")
+    
+    
+# 放在 import 后、函数定义后
+if "db_inited" not in st.session_state:
+    try:
+        init_db()        # 里面是 with closing(get_db_conn())：用完即关
+        st.session_state.db_inited = True
+    except Exception as e:
+        st.sidebar.error(f"DB init failed: {e}")
 
 # ---------------------- Session Init ----------------------
 if "lang" not in st.session_state:
@@ -233,13 +242,17 @@ with st.sidebar:
 
     # ====== Diagnostics ======
     with st.expander("🧪 Diagnostics"):
-        try:
-            conn = get_db_conn()
-            with conn.cursor() as cur:
-                cur.execute("SELECT NOW();")
+        st.caption("Click to run checks. They are skipped by default to keep the app snappy.")
+        run_diag = st.button("▶️ Run diagnostics")
+        if run_diag:
+            try:
+                from contextlib import closing
+                with closing(get_db_conn()) as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT NOW();")
                 st.success("DB connected ✔️")
-        except Exception as e:
-            st.error(f"DB connect failed: {e}")
+            except Exception as e:
+                st.error(f"DB connect failed: {e}")
         st.write("LangChain imports ok:", LANGCHAIN_AVAILABLE)
         st.write("API Key detected:", bool(os.getenv("OPENAI_API_KEY")))
 
@@ -319,9 +332,9 @@ def create_chain(vs):
 # ---------------------- Utilities ----------------------
 
 def now_ts(lang: str) -> str:
-    """Return current Singapore time formatted to seconds."""
-    tz = ZoneInfo("Asia/Singapore")
-    return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+    """Return local timestamp (SGT assumed) formatted to seconds."""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 
 # ===== Small-talk helpers (shared) =====
 def normalize_word(word: str) -> str:
@@ -687,7 +700,8 @@ elif st.session_state.page == "ticket":
         try:
             with closing(get_db_conn()) as conn:
                 with conn, conn.cursor() as cur:
-                    cur.execute("DELETE FROM repair_tickets;")
+                    # 原来：cur.execute("DELETE FROM repair_tickets;")
+                    cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
             st.success("所有报修记录已删除！" if is_zh else "All tickets deleted!")
             st.rerun()
         except Exception as e:
@@ -695,7 +709,7 @@ elif st.session_state.page == "ticket":
 
     # 读取 & 渲染
     try:
-        rows = list_tickets()
+        rows = list_reminders()
     except Exception as e:
         rows = []
         st.error(f"DB read error: {e}")
@@ -703,13 +717,10 @@ elif st.session_state.page == "ticket":
     if not rows:
         st.caption(empty_hint)
     else:
-        tz = ZoneInfo("Asia/Singapore")
         for r in rows:
-            created_local = r["created_at"].astimezone(tz)
-            ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
-            st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
-            if r["description"]:
-                st.caption(r["description"])
+            # 直接格式化数据库时间（不做时区转换）
+            ts_str = r["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+            st.write(fmt_line.format(day=r["day_of_month"], note=r["note"] or "—"))
             st.caption(f"Created at: {ts_str} (SGT)")
 
 # --- page: rent reminder ---
@@ -751,7 +762,8 @@ elif st.session_state.page == "reminder":
         try:
             with closing(get_db_conn()) as conn:
                 with conn, conn.cursor() as cur:
-                    cur.execute("DELETE FROM rent_reminders;")
+                    # 原来：cur.execute("DELETE FROM rent_reminders;")
+                    cur.execute("TRUNCATE TABLE rent_reminders RESTART IDENTITY;")
             st.success("所有提醒已清空！" if is_zh else "All reminders deleted!")
             st.rerun()
         except Exception as e:
@@ -767,10 +779,9 @@ elif st.session_state.page == "reminder":
     if not rows:
         st.caption(empty_hint)
     else:
-        tz = ZoneInfo("Asia/Singapore")
         for r in rows:
-            created_local = r["created_at"].astimezone(tz)
-            ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
+            # 直接格式化数据库时间（不做时区转换）
+            ts_str = r["created_at"].strftime("%Y-%m-%d %H:%M:%S")
             st.write(fmt_line.format(day=r["day_of_month"], note=r["note"] or "—"))
             st.caption(f"Created at: {ts_str} (SGT)")
             
