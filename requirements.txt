@@ -1,9 +1,33 @@
-streamlit
-python-dotenv
-langchain
-langchain-community
-langchain-openai
-openai
-faiss-cpu
-pypdf
-psycopg2-binary
+# ===============================
+# Tenant Chatbot (Streamlit + RAG + Neon PostgreSQL)
+# ===============================
+
+# --- Core Web Framework ---
+streamlit==1.38.0
+
+# --- LangChain Ecosystem ---
+langchain==0.3.0
+langchain-core==0.3.0
+langchain-community==0.3.0
+langchain-openai==0.2.0
+
+# --- OpenAI / Embeddings ---
+openai>=1.47.0
+
+# --- Vector Store / Document Loading ---
+faiss-cpu>=1.8.0
+pypdf>=3.17.0
+
+# --- Environment Variables ---
+python-dotenv>=1.0.1
+
+# --- PostgreSQL Driver (for Neon) ---
+psycopg2-binary>=2.9.9
+
+# --- Data Handling / Utilities ---
+numpy>=1.26.4
+pandas>=2.2.3
+
+# --- Optional but useful for debugging / cloud readiness ---
+tqdm>=4.66.5
+requests>=2.32.3
