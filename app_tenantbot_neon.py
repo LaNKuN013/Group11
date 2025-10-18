@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo  # Python 3.9+
 import streamlit as st
 
 # ---------- Database (Neon/Postgres via psycopg2) ----------
+from contextlib import closing
 import psycopg2
 import psycopg2.extras
 
@@ -40,99 +41,102 @@ except Exception:
 
 
 
-@st.cache_resource(show_spinner=False)
+# ---------- Database (Neon/Postgres via psycopg2) ----------
+
 def get_db_conn():
-    """Create a cached Postgres connection.
-    Priority: DATABASE_URL (with sslmode=require) → split env vars.
+    """
+    每次返回一个**新的**连接（不要缓存），强制 sslmode=require，并打开 keepalive。
+    建议 DATABASE_URL 使用 *-pooler 主机名。
     """
     dsn = os.getenv("DATABASE_URL")
-    if dsn:
-        return psycopg2.connect(dsn)
-    host = os.getenv("PG_HOST")
-    db = os.getenv("PG_DB")
-    user = os.getenv("PG_USER")
-    pwd = os.getenv("PG_PASSWORD")
-    port = os.getenv("PG_PORT", "5432")
-    sslmode = os.getenv("PG_SSLMODE", "require")
-    return psycopg2.connect(host=host, database=db, user=user, password=pwd, port=port, sslmode=sslmode)
+    if not dsn:
+        host = os.getenv("PG_HOST")
+        db   = os.getenv("PG_DB")
+        user = os.getenv("PG_USER")
+        pwd  = os.getenv("PG_PASSWORD")
+        port = os.getenv("PG_PORT", "5432")
+        if not all([host, db, user, pwd]):
+            raise RuntimeError("DATABASE_URL or PG_* env vars are not set.")
+        dsn = f"postgresql://{user}:{pwd}@{host}:{port}/{db}?sslmode=require"
 
-@st.cache_resource(show_spinner=False)
+    if "sslmode=" not in dsn:
+        dsn += ("&" if "?" in dsn else "?") + "sslmode=require"
+
+    return psycopg2.connect(
+        dsn,
+        sslmode="require",
+        connect_timeout=10,
+        keepalives=1,
+        keepalives_idle=30,
+        keepalives_interval=10,
+        keepalives_count=5,
+        cursor_factory=psycopg2.extras.DictCursor,
+    )
+
 def init_db():
-    conn = get_db_conn()
-    with conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS repair_tickets (
-                id SERIAL PRIMARY KEY,
-                title TEXT NOT NULL,
-                description TEXT,
-                status TEXT NOT NULL DEFAULT 'open',
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-            """
-        )
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS rent_reminders (
-                id SERIAL PRIMARY KEY,
-                day_of_month INT NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
-                note TEXT,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-            """
-        )
+    with closing(get_db_conn()) as conn:
+        with conn, conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS repair_tickets (
+                    id SERIAL PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rent_reminders (
+                    id SERIAL PRIMARY KEY,
+                    day_of_month INT NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
+                    note TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
     return True
 
-# CRUD helpers
+
+# ---------- CRUD helpers（短连接） ----------
 
 def create_ticket(title: str, desc: str):
-    conn = get_db_conn()
-    with conn, conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-        cur.execute(
-            "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
-            (title, desc, "open"),
-        )
-        return cur.fetchone()["id"]
-
+    with closing(get_db_conn()) as conn:
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
+                (title, desc, "open"),
+            )
+            return cur.fetchone()["id"]
 
 def list_tickets(limit: int = 50):
-    conn = get_db_conn()
-    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-        cur.execute(
-            """
-            SELECT id, title, status, description, created_at
-            FROM repair_tickets
-            ORDER BY id DESC
-            LIMIT %s;
-            """,
-            (limit,),
-        )
-        return cur.fetchall()
-
+    with closing(get_db_conn()) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, title, status, description, created_at
+                FROM repair_tickets
+                ORDER BY id DESC
+                LIMIT %s;
+            """, (limit,))
+            return cur.fetchall()
 
 def create_reminder(day_of_month: int, note: str):
-    conn = get_db_conn()
-    with conn, conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-        cur.execute(
-            "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
-            (day_of_month, note),
-        )
-        return cur.fetchone()["id"]
-
+    with closing(get_db_conn()) as conn:
+        with conn, conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
+                (day_of_month, note),
+            )
+            return cur.fetchone()["id"]
 
 def list_reminders(limit: int = 20):
-    conn = get_db_conn()
-    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-        cur.execute(
-            """
-            SELECT id, day_of_month, note, created_at
-            FROM rent_reminders
-            ORDER BY id DESC
-            LIMIT %s;
-            """,
-            (limit,),
-        )
-        return cur.fetchall()
+    with closing(get_db_conn()) as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, day_of_month, note, created_at
+                FROM rent_reminders
+                ORDER BY id DESC
+                LIMIT %s;
+            """, (limit,))
+            return cur.fetchall()
 
 # ---------- Page config ----------
 st.set_page_config(
@@ -642,30 +646,29 @@ elif st.session_state.page == "ticket":
     is_zh = st.session_state.get("lang", "en") == "zh"
     if is_zh:
         st.title("🧰 创建报修工单")
-        issue_label = "问题标题"
-        issue_ph = "厨房水槽漏水"
-        desc_label = "问题描述"
-        desc_ph = "请描述具体情况…"
+        issue_label = "问题标题"; issue_ph = "厨房水槽漏水"
+        desc_label = "问题描述"; desc_ph = "请描述具体情况…"
         submit_btn = "📨 提交报修"
         created_ok = "报修已保存到数据库！"
         my_tickets = "我的报修工单"
         status_open = "进行中"
         empty_hint = "暂无工单"
+        clear_btn = "🗑️ 清除所有报修记录"
     else:
         st.title("🧰 Create Repair Ticket")
-        issue_label = "Issue title"
-        issue_ph = "Leaking sink in kitchen"
-        desc_label = "Description"
-        desc_ph = "Describe the issue…"
+        issue_label = "Issue title"; issue_ph = "Leaking sink in kitchen"
+        desc_label = "Description";  desc_ph = "Describe the issue…"
         submit_btn = "📨 Submit Ticket"
         created_ok = "Ticket saved to database!"
         my_tickets = "My Tickets"
         status_open = "open"
         empty_hint = "No tickets yet"
+        clear_btn = "🗑️ Clear All Tickets"
 
+    # 提交表单
     with st.form("ticket_form", clear_on_submit=True):
         t_title = st.text_input(issue_label, placeholder=issue_ph)
-        t_desc = st.text_area(desc_label, placeholder=desc_ph)
+        t_desc  = st.text_area(desc_label, placeholder=desc_ph)
         submitted = st.form_submit_button(submit_btn)
         if submitted:
             if not t_title.strip():
@@ -677,51 +680,33 @@ elif st.session_state.page == "ticket":
                 except Exception as e:
                     st.error(f"DB error: {e}")
 
-    # list
+    st.subheader(my_tickets)
+
+    # 先处理清空按钮，再读取列表
+    if st.button(clear_btn, key="clear_all_tickets"):
+        try:
+            with closing(get_db_conn()) as conn:
+                with conn, conn.cursor() as cur:
+                    cur.execute("DELETE FROM repair_tickets;")
+            st.success("所有报修记录已删除！" if is_zh else "All tickets deleted!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"DB delete error: {e}")
+
+    # 读取 & 渲染
     try:
         rows = list_tickets()
     except Exception as e:
         rows = []
         st.error(f"DB read error: {e}")
 
-    st.subheader(my_tickets)
-
-    # —— 直接清空全部报修（无确认弹窗）——
-    if st.button("🗑️ Clear All Tickets" if not is_zh else "🗑️ 清除所有报修记录", key="clear_all_tickets"):
-        try:
-            from contextlib import closing
-            with closing(get_db_conn()) as conn:
-                with conn, conn.cursor() as cur:
-                    cur.execute("DELETE FROM repair_tickets;")
-            st.success("All tickets deleted!" if not is_zh else "所有报修记录已删除！")
-            st.rerun()
-        except Exception as e:
-            st.error(f"DB delete error: {e}")
-
-    # 列表
-    if not rows:
-        st.caption(empty_hint)
-    else:
-        from zoneinfo import ZoneInfo
-        tz = ZoneInfo("Asia/Singapore")
-        for r in rows:
-            created_local = r["created_at"].astimezone(tz)
-            ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
-            st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
-            if r["description"]:
-                st.caption(r["description"])
-            st.caption(f"Created at: {ts_str} (SGT)")
-
-    # === 列表 ===
     if not rows:
         st.caption(empty_hint)
     else:
         tz = ZoneInfo("Asia/Singapore")
         for r in rows:
-            # SGT 时间（精确到秒）
             created_local = r["created_at"].astimezone(tz)
             ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
-
             st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
             if r["description"]:
                 st.caption(r["description"])
@@ -732,27 +717,24 @@ elif st.session_state.page == "reminder":
     is_zh = st.session_state.get("lang", "en") == "zh"
     if is_zh:
         st.title("💰 创建房租提醒")
-        day_label = "每月几号"
-        note_label = "备注"
-        note_ph = "通过银行卡尾号••1234转账"
-        save_btn = "💾 保存提醒"
-        saved_ok = "提醒已保存到数据库！"
+        day_label = "每月几号"; note_label = "备注"; note_ph = "通过银行卡尾号••1234转账"
+        save_btn = "💾 保存提醒"; saved_ok = "提醒已保存到数据库！"
         current_title = "当前提醒"
         fmt_line = "每月的第 **{day}** 天 — {note}"
         empty_hint = "暂无提醒"
+        clear_btn = "🗑️ 清除所有提醒"
     else:
         st.title("💰 Create Rent Reminder")
-        day_label = "Due day of month"
-        note_label = "Note"
-        note_ph = "Pay via bank transfer ending ••1234"
-        save_btn = "💾 Save Reminder"
-        saved_ok = "Reminder saved to database!"
+        day_label = "Due day of month"; note_label = "Note"; note_ph = "Pay via bank transfer ending ••1234"
+        save_btn = "💾 Save Reminder"; saved_ok = "Reminder saved to database!"
         current_title = "Current Reminder"
         fmt_line = "Every month on day **{day}** — {note}"
         empty_hint = "No reminders yet"
+        clear_btn = "🗑️ Clear All Reminders"
 
+    # 表单
     with st.form("reminder_form", clear_on_submit=True):
-        r_day = st.number_input(day_label, 1, 31, 1)
+        r_day  = st.number_input(day_label, 1, 31, 1)
         r_note = st.text_input(note_label, placeholder=note_ph)
         r_submit = st.form_submit_button(save_btn)
         if r_submit:
@@ -762,31 +744,29 @@ elif st.session_state.page == "reminder":
             except Exception as e:
                 st.error(f"DB error: {e}")
 
+    st.subheader(current_title)
+
+    # 先处理清空按钮，再读取列表
+    if st.button(clear_btn, key="clear_all_reminders"):
+        try:
+            with closing(get_db_conn()) as conn:
+                with conn, conn.cursor() as cur:
+                    cur.execute("DELETE FROM rent_reminders;")
+            st.success("所有提醒已清空！" if is_zh else "All reminders deleted!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"DB delete error: {e}")
+
+    # 读取 & 渲染
     try:
         rows = list_reminders()
     except Exception as e:
         rows = []
         st.error(f"DB read error: {e}")
 
-    st.subheader(current_title)
-
-    # —— 直接清空全部提醒（无确认弹窗）——
-    if st.button("🗑️ Clear All Reminders" if not is_zh else "🗑️ 清除所有提醒", key="clear_all_reminders"):
-        try:
-            from contextlib import closing
-            with closing(get_db_conn()) as conn:
-                with conn, conn.cursor() as cur:
-                    cur.execute("DELETE FROM rent_reminders;")
-            st.success("All reminders deleted!" if not is_zh else "所有提醒已清空！")
-            st.rerun()
-        except Exception as e:
-            st.error(f"DB delete error: {e}")
-
-    # 列表
     if not rows:
         st.caption(empty_hint)
     else:
-        from zoneinfo import ZoneInfo
         tz = ZoneInfo("Asia/Singapore")
         for r in rows:
             created_local = r["created_at"].astimezone(tz)
