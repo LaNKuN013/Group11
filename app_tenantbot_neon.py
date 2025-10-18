@@ -88,6 +88,8 @@ def init_db():
         st.warning(f"⚠️ Database connection issue: {e}")
         return False
 
+DB_READY = init_db()
+
 # CRUD helpers
 
 def create_ticket(title: str, desc: str):
