@@ -79,11 +79,11 @@ def apply_chat_input_visibility():
         unsafe_allow_html=True,
     )
 
-def clear_chat_history():
-    """Clear both online/offline chat transcripts.
-    清空在线/离线两种会话记录。"""
-    st.session_state.offline_msgs = []
-    st.session_state.online_msgs = []
+# def clear_chat_history():
+#     """Clear both online/offline chat transcripts.
+#     清空在线/离线两种会话记录。"""
+#     st.session_state.offline_msgs = []
+#     st.session_state.online_msgs = []
 
 # =============== Lazy imports / 惰性导入（用到才加载依赖） ===============
 
@@ -225,15 +225,30 @@ def init_db():
 
 # CRUD helpers / 简单的新增-查询-清空操作
 
+# def create_ticket(title: str, desc: str):
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)
+#         with conn.cursor() as cur:
+#             cur.execute(
+#                 "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
+#                 (title, desc, "open"),
+#             )
+#             return cur.fetchone()["id"]
+        
 def create_ticket(title: str, desc: str):
     with get_db_conn() as conn:
         ensure_schema(conn)
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
+                "INSERT INTO repair_tickets (title, description, status) "
+                "VALUES (%s, %s, %s) RETURNING id;",
                 (title, desc, "open"),
             )
-            return cur.fetchone()["id"]
+            tid = cur.fetchone()["id"]
+            # 立刻查询当前总数
+            cur.execute("SELECT COUNT(*) AS c FROM repair_tickets;")
+            total = cur.fetchone()["c"]
+            return tid, total
 
 
 def list_tickets(limit: int = 50):
@@ -250,13 +265,15 @@ def list_tickets(limit: int = 50):
                 (limit,),
             )
             return cur.fetchall()
+        
 
 
-def clear_tickets():
-    with get_db_conn() as conn:
-        ensure_schema(conn)
-        with conn.cursor() as cur:
-            cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
+
+# def clear_tickets():
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)
+#         with conn.cursor() as cur:
+#             cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
 
 
 # def create_reminder(day_of_month: int, note: str):
@@ -300,11 +317,11 @@ def list_reminders(limit: int = 20):
             return cur.fetchall()
 
 
-def clear_reminders():
-    with get_db_conn() as conn:
-        ensure_schema(conn)
-        with conn.cursor() as cur:
-            cur.execute("TRUNCATE TABLE rent_reminders RESTART IDENTITY;")
+# def clear_reminders():
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)
+#         with conn.cursor() as cur:
+#             cur.execute("TRUNCATE TABLE rent_reminders RESTART IDENTITY;")
 
 
 # ================== RAG helpers / RAG 辅助函数（惰性导入） ==================
@@ -837,6 +854,26 @@ elif st.session_state.page == "ticket":
     st.title("🧰 创建报修工单" if is_zh else "🧰 Create Repair Ticket")
 
     # Submit ticket form / 提交报修表单
+    # with st.form("ticket_form", clear_on_submit=True):
+    #     t_title = st.text_input(
+    #         "问题标题" if is_zh else "Issue title",
+    #         placeholder="厨房水槽漏水" if is_zh else "Leaking sink in kitchen",
+    #     )
+    #     t_desc = st.text_area(
+    #         "问题描述" if is_zh else "Description",
+    #         placeholder="请描述具体情况…" if is_zh else "Describe the issue…",
+    #     )
+    #     submitted = st.form_submit_button("📨 提交报修" if is_zh else "📨 Submit Ticket")
+    #     if submitted:
+    #         if not t_title.strip():
+    #             st.warning("请填写问题标题。" if is_zh else "Please enter a title.")
+    #         else:
+    #             try:
+    #                 new_id = create_ticket(t_title.strip(), t_desc.strip())
+    #                 st.success(("报修已保存到数据库！" if is_zh else "Ticket saved to database!") + f"  (#{new_id})")
+    #             except Exception as e:
+    #                 st.error(f"DB error: {e}")
+    
     with st.form("ticket_form", clear_on_submit=True):
         t_title = st.text_input(
             "问题标题" if is_zh else "Issue title",
@@ -852,21 +889,18 @@ elif st.session_state.page == "ticket":
                 st.warning("请填写问题标题。" if is_zh else "Please enter a title.")
             else:
                 try:
-                    new_id = create_ticket(t_title.strip(), t_desc.strip())
-                    st.success(("报修已保存到数据库！" if is_zh else "Ticket saved to database!") + f"  (#{new_id})")
+                    _, total = create_ticket(t_title.strip(), t_desc.strip())
+                    st.success(
+                        f"报修已保存！当前共有 {total} 条工单。"
+                        if is_zh else
+                        f"Ticket saved! (Total tickets: {total})"
+                    )
                 except Exception as e:
                     st.error(f"DB error: {e}")
 
-    # List my tickets / 显示我的报修工单
-    # st.subheader("我的报修工单" if is_zh else "My Tickets")
-    # if st.button("🗑️ 清除所有报修记录" if is_zh else "🗑️ Clear All Tickets"):
-    #     try:
-    #         clear_tickets()
-    #         st.success("已删除！" if is_zh else "All tickets deleted!")
-    #         st.rerun()  # refresh list / 刷新列表
-    #     except Exception as e:
-    #         st.error(f"DB delete error: {e}")
 
+    # List my tickets / 显示我的报修工单
+    st.subheader("我的报修工单" if is_zh else "My Tickets")
     # try:
     #     rows = list_tickets()
     # except Exception as e:
@@ -880,10 +914,28 @@ elif st.session_state.page == "ticket":
     #     for r in rows:
     #         created_local = r["created_at"].astimezone(tz)
     #         ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
-    #         st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
-    #         if r["description"]:
-    #             st.caption(r["description"])
-    #         st.caption(f"Created at: {ts_str} (SGT)")
+
+    #         with st.container(border=True):
+    #             st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
+    #             if r["description"]:
+    #                 st.caption(r["description"])
+    #             st.caption(f"Created at: {ts_str} (SGT)")
+
+    #             if st.button("❌ 删除" if is_zh else "❌ Delete", key=f"del_ticket_{r['id']}"):
+    #                 try:
+    #                     with get_db_conn() as conn:
+    #                         with conn.cursor() as cur:
+    #                             cur.execute("DELETE FROM repair_tickets WHERE id = %s;", (r["id"],))
+    #                     st.success("已删除！" if is_zh else "Deleted!")
+    #                     st.rerun()
+    #                 except Exception as e:
+    #                     st.error(f"Delete failed: {e}")
+    
+    ticket_delete_msg_key = "ticket_delete_msg"
+    if st.session_state.get(ticket_delete_msg_key):
+        st.success(st.session_state[ticket_delete_msg_key])
+        st.session_state.pop(ticket_delete_msg_key, None)
+
     st.subheader("我的报修工单" if is_zh else "My Tickets")
     try:
         rows = list_tickets()
@@ -899,21 +951,40 @@ elif st.session_state.page == "ticket":
             created_local = r["created_at"].astimezone(tz)
             ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
 
+            # 每条工单一个容器；右上角 ✖ 删除（纯文本按钮）
             with st.container(border=True):
-                st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
-                if r["description"]:
-                    st.caption(r["description"])
-                st.caption(f"Created at: {ts_str} (SGT)")
+                left, right = st.columns([0.95, 0.05], vertical_alignment="top")
 
-                if st.button("❌ 删除" if is_zh else "❌ Delete", key=f"del_ticket_{r['id']}"):
-                    try:
-                        with get_db_conn() as conn:
-                            with conn.cursor() as cur:
-                                cur.execute("DELETE FROM repair_tickets WHERE id = %s;", (r["id"],))
-                        st.success("已删除！" if is_zh else "Deleted!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Delete failed: {e}")
+                with left:
+                    title_line = (
+                        f"**{r['title']}** — _{r['status']}_"
+                        if is_zh else
+                        f"**{r['title']}** — _{r['status']}_"
+                    )
+                    st.markdown(title_line)
+                    if r.get("description"):
+                        st.caption(r["description"])
+                    st.caption(("创建时间: " if is_zh else "Created at: ") + f"{ts_str} (SGT)")
+
+                with right:
+                    if st.button("✖", key=f"del_ticket_{r['id']}", help="Delete this ticket"):
+                        try:
+                            with get_db_conn() as conn:
+                                with conn.cursor() as cur:
+                                    cur.execute("DELETE FROM repair_tickets WHERE id = %s;", (r["id"],))
+                                    # 可选：删除后取最新总数，让提示更完整
+                                    cur.execute("SELECT COUNT(*) AS c FROM repair_tickets;")
+                                    new_total = cur.fetchone()["c"]
+
+                            st.session_state[ticket_delete_msg_key] = (
+                                f"已删除工单。当前共有 {new_total} 条工单。"
+                                if is_zh else
+                                f"Ticket deleted. Total tickets: {new_total}."
+                            )
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Delete failed: {e}")
+
 
 # --- Rent Reminder page / 房租提醒 ---
 elif st.session_state.page == "reminder":
@@ -945,13 +1016,14 @@ elif st.session_state.page == "reminder":
 
         if r_submit:
             try:
-                create_reminder(int(r_day), (r_note or "").strip())
+                # ✅ 直接接收 (rid, total)；不再额外 list_reminders()
+                rid, total = create_reminder(int(r_day), (r_note or "").strip())
 
-                # ✅ 获取新的总数
-                rows = list_reminders()
-                total = len(rows)
-
-                msg = f"已保存！目前共有 {total} 条提醒。" if is_zh else f"Reminder saved! (Total reminders: {total})"
+                msg = (
+                    f"已保存！目前共有 {total} 条提醒。"
+                    if is_zh else
+                    f"Reminder saved! (Total reminders: {total})"
+                )
                 st.success(msg)
 
             except Exception as e:
