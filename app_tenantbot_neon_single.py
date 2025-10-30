@@ -259,6 +259,16 @@ def clear_tickets():
             cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
 
 
+# def create_reminder(day_of_month: int, note: str):
+#     with get_db_conn() as conn:
+#         ensure_schema(conn)
+#         with conn.cursor() as cur:
+#             cur.execute(
+#                 "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
+#                 (day_of_month, note),
+#             )
+#             return cur.fetchone()["id"]
+        
 def create_reminder(day_of_month: int, note: str):
     with get_db_conn() as conn:
         ensure_schema(conn)
@@ -267,7 +277,11 @@ def create_reminder(day_of_month: int, note: str):
                 "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
                 (day_of_month, note),
             )
-            return cur.fetchone()["id"]
+            rid = cur.fetchone()["id"]
+            # 立刻查询当前总数
+            cur.execute("SELECT COUNT(*) AS c FROM rent_reminders;")
+            total = cur.fetchone()["c"]
+            return rid, total
 
 
 def list_reminders(limit: int = 20):
@@ -907,6 +921,20 @@ elif st.session_state.page == "reminder":
     st.title("💰 创建房租提醒" if is_zh else "💰 Create Rent Reminder")
 
     # Create reminder form / 创建提醒表单
+    # with st.form("reminder_form", clear_on_submit=True):
+    #     r_day = st.number_input("每月几号" if is_zh else "Due day of month", 1, 31, 1)
+    #     r_note = st.text_input(
+    #         "备注" if is_zh else "Note",
+    #         placeholder="通过银行卡尾号••1234转账" if is_zh else "Pay via bank transfer ending ••1234",
+    #     )
+    #     r_submit = st.form_submit_button("💾 保存提醒" if is_zh else "💾 Save Reminder")
+    #     if r_submit:
+    #         try:
+    #             rid = create_reminder(int(r_day), (r_note or "").strip())
+    #             st.success(("提醒已保存到数据库！" if is_zh else "Reminder saved to database!") + f"  (#{rid})")
+    #         except Exception as e:
+    #             st.error(f"DB error: {e}")
+    
     with st.form("reminder_form", clear_on_submit=True):
         r_day = st.number_input("每月几号" if is_zh else "Due day of month", 1, 31, 1)
         r_note = st.text_input(
@@ -916,8 +944,11 @@ elif st.session_state.page == "reminder":
         r_submit = st.form_submit_button("💾 保存提醒" if is_zh else "💾 Save Reminder")
         if r_submit:
             try:
-                rid = create_reminder(int(r_day), (r_note or "").strip())
-                st.success(("提醒已保存到数据库！" if is_zh else "Reminder saved to database!") + f"  (#{rid})")
+                rid, total = create_reminder(int(r_day), (r_note or "").strip())
+                if is_zh:
+                    st.success(f"提醒已保存到数据库！（# {rid}，当前共 {total} 条）")
+                else:
+                    st.success(f"Reminder saved to database! (#{rid}; total {total})")
             except Exception as e:
                 st.error(f"DB error: {e}")
 
@@ -955,6 +986,14 @@ elif st.session_state.page == "reminder":
     
     st.subheader("当前提醒" if is_zh else "Current Reminders")
 
+    # ========== Flash banner for delete success / 删除成功后的一次性提示 ==========
+    # 如果上一轮点击了删除，我们把消息存在 session_state 里，刷新后在这里显示一次
+    delete_msg_key = "rem_delete_msg"
+    if st.session_state.get(delete_msg_key):
+        st.success(st.session_state[delete_msg_key])
+        # 显示一次后立刻清除
+        st.session_state.pop(delete_msg_key, None)
+
     # 读取提醒列表
     try:
         rows = list_reminders()
@@ -973,7 +1012,7 @@ elif st.session_state.page == "reminder":
 
             # 每条提醒一个容器；右上角是删除按钮
             with st.container(border=True):
-                left, right = st.columns([0.92, 0.08], vertical_alignment="top")
+                left, right = st.columns([0.98, 0.02], vertical_alignment="top")
 
                 # 左侧：正文
                 with left:
@@ -992,8 +1031,12 @@ elif st.session_state.page == "reminder":
                             with get_db_conn() as conn:
                                 with conn.cursor() as cur:
                                     cur.execute("DELETE FROM rent_reminders WHERE id = %s;", (r["id"],))
-                            st.toast("已删除" if is_zh else "Deleted")
-                            st.rerun()  # 简洁起见：删除后刷新列表
+
+                            # 写入一次性提示信息，然后刷新
+                            st.session_state[delete_msg_key] = (
+                                f"已删除提醒（# {r['id']}）。" if is_zh else f"Reminder deleted (#{r['id']})."
+                            )
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Delete failed: {e}")
 
