@@ -34,24 +34,24 @@ _LATIN_RE = re.compile(r"[A-Za-z]")
 st.set_page_config(page_title="Tenant Chatbot", page_icon="🤖", layout="wide")
 
 # Change chat_input border color to GREEN
-st.markdown("""
-<style>
-/* 默认状态：保持 Streamlit 原样 */
-div[data-testid="stChatInput"] > div {
-  border: inherit !important;
-  box-shadow: none !important;
-  transition: border 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-}
+# st.markdown("""
+# <style>
+# /* 默认状态：保持 Streamlit 原样 */
+# div[data-testid="stChatInput"] > div {
+#   border: inherit !important;
+#   box-shadow: none !important;
+#   transition: border 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+# }
 
-/* ✅ 只有点击输入框（focus）时才变浅绿色 */
-div[data-testid="stChatInput"] > div:focus-within {
-  border: 2px solid #6bd38f !important;   /* 💚 浅绿色边框 */
-  border-radius: 30px !important;
-  box-shadow: 0 0 0 3px rgba(107, 211, 143, 0.25) !important;  /* 轻微淡绿发光 */
-}
+# /* ✅ 只有点击输入框（focus）时才变浅绿色 */
+# div[data-testid="stChatInput"] > div:focus-within {
+#   border: 2px solid #6bd38f !important;   /* 💚 浅绿色边框 */
+#   border-radius: 30px !important;
+#   box-shadow: 0 0 0 3px rgba(107, 211, 143, 0.25) !important;  /* 轻微淡绿发光 */
+# }
 
-</style>
-""", unsafe_allow_html=True)
+# </style>
+# """, unsafe_allow_html=True)
 
 # Initialize session-scoped variables if missing / 首次访问时初始化会话变量
 if "lang" not in st.session_state:
@@ -864,15 +864,33 @@ elif st.session_state.page == "ticket":
                     st.error(f"DB error: {e}")
 
     # List my tickets / 显示我的报修工单
-    st.subheader("我的报修工单" if is_zh else "My Tickets")
-    if st.button("🗑️ 清除所有报修记录" if is_zh else "🗑️ Clear All Tickets"):
-        try:
-            clear_tickets()
-            st.success("已删除！" if is_zh else "All tickets deleted!")
-            st.rerun()  # refresh list / 刷新列表
-        except Exception as e:
-            st.error(f"DB delete error: {e}")
+    # st.subheader("我的报修工单" if is_zh else "My Tickets")
+    # if st.button("🗑️ 清除所有报修记录" if is_zh else "🗑️ Clear All Tickets"):
+    #     try:
+    #         clear_tickets()
+    #         st.success("已删除！" if is_zh else "All tickets deleted!")
+    #         st.rerun()  # refresh list / 刷新列表
+    #     except Exception as e:
+    #         st.error(f"DB delete error: {e}")
 
+    # try:
+    #     rows = list_tickets()
+    # except Exception as e:
+    #     rows = []
+    #     st.error(f"DB read error: {e}")
+
+    # if not rows:
+    #     st.caption("暂无工单" if is_zh else "No tickets yet")
+    # else:
+    #     tz = ZoneInfo("Asia/Singapore")
+    #     for r in rows:
+    #         created_local = r["created_at"].astimezone(tz)
+    #         ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
+    #         st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
+    #         if r["description"]:
+    #             st.caption(r["description"])
+    #         st.caption(f"Created at: {ts_str} (SGT)")
+    st.subheader("我的报修工单" if is_zh else "My Tickets")
     try:
         rows = list_tickets()
     except Exception as e:
@@ -886,10 +904,22 @@ elif st.session_state.page == "ticket":
         for r in rows:
             created_local = r["created_at"].astimezone(tz)
             ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
-            st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
-            if r["description"]:
-                st.caption(r["description"])
-            st.caption(f"Created at: {ts_str} (SGT)")
+
+            with st.container(border=True):
+                st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
+                if r["description"]:
+                    st.caption(r["description"])
+                st.caption(f"Created at: {ts_str} (SGT)")
+
+                if st.button("❌ 删除" if is_zh else "❌ Delete", key=f"del_ticket_{r['id']}"):
+                    try:
+                        with get_db_conn() as conn:
+                            with conn.cursor() as cur:
+                                cur.execute("DELETE FROM repair_tickets WHERE id = %s;", (r["id"],))
+                        st.success("已删除！" if is_zh else "Deleted!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Delete failed: {e}")
 
 # --- Rent Reminder page / 房租提醒 ---
 elif st.session_state.page == "reminder":
@@ -912,15 +942,36 @@ elif st.session_state.page == "reminder":
                 st.error(f"DB error: {e}")
 
     # List reminders / 展示提醒列表
-    st.subheader("当前提醒" if is_zh else "Current Reminder")
-    if st.button("🗑️ 清除所有提醒" if is_zh else "🗑️ Clear All Reminders"):
-        try:
-            clear_reminders()
-            st.success("已清空！" if is_zh else "All reminders deleted!")
-            st.rerun()
-        except Exception as e:
-            st.error(f"DB delete error: {e}")
+    # st.subheader("当前提醒" if is_zh else "Current Reminder")
+    # if st.button("🗑️ 清除所有提醒" if is_zh else "🗑️ Clear All Reminders"):
+    #     try:
+    #         clear_reminders()
+    #         st.success("已清空！" if is_zh else "All reminders deleted!")
+    #         st.rerun()
+    #     except Exception as e:
+    #         st.error(f"DB delete error: {e}")
 
+    # try:
+    #     rows = list_reminders()
+    # except Exception as e:
+    #     rows = []
+    #     st.error(f"DB read error: {e}")
+
+    # if not rows:
+    #     st.caption("暂无提醒" if is_zh else "No reminders yet")
+    # else:
+    #     tz = ZoneInfo("Asia/Singapore")
+    #     for r in rows:
+    #         created_local = r["created_at"].astimezone(tz)
+    #         ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
+    #         st.write(
+    #             f"每月的第 **{r['day_of_month']}** 天 — {r['note'] or '—'}"
+    #             if is_zh
+    #             else f"Every month on day **{r['day_of_month']}** — {r['note'] or '—'}"
+    #         )
+    #         st.caption(f"Created at: {ts_str} (SGT)")
+            
+    st.subheader("当前提醒" if is_zh else "Current Reminders")
     try:
         rows = list_reminders()
     except Exception as e:
@@ -934,12 +985,24 @@ elif st.session_state.page == "reminder":
         for r in rows:
             created_local = r["created_at"].astimezone(tz)
             ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
-            st.write(
-                f"每月的第 **{r['day_of_month']}** 天 — {r['note'] or '—'}"
-                if is_zh
-                else f"Every month on day **{r['day_of_month']}** — {r['note'] or '—'}"
-            )
-            st.caption(f"Created at: {ts_str} (SGT)")
+
+            with st.container(border=True):
+                st.write(
+                    f"每月的第 **{r['day_of_month']}** 天 — {r['note'] or '—'}"
+                    if is_zh else
+                    f"Every month on day **{r['day_of_month']}** — {r['note'] or '—'}"
+                )
+                st.caption(f"Created at: {ts_str} (SGT)")
+
+                if st.button("❌ 删除" if is_zh else "❌ Delete", key=f"del_reminder_{r['id']}"):
+                    try:
+                        with get_db_conn() as conn:
+                            with conn.cursor() as cur:
+                                cur.execute("DELETE FROM rent_reminders WHERE id = %s;", (r["id"],))
+                        st.success("已删除！" if is_zh else "Deleted!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Delete failed: {e}")
 
 # --- General Chat (offline) / 通用离线聊天 ---
 elif st.session_state.page == "offline":
