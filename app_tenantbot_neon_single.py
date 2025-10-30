@@ -942,13 +942,18 @@ elif st.session_state.page == "reminder":
             placeholder="通过银行卡尾号••1234转账" if is_zh else "Pay via bank transfer ending ••1234",
         )
         r_submit = st.form_submit_button("💾 保存提醒" if is_zh else "💾 Save Reminder")
+
         if r_submit:
             try:
-                rid, total = create_reminder(int(r_day), (r_note or "").strip())
-                if is_zh:
-                    st.success(f"提醒已保存到数据库！（# {rid}，当前共 {total} 条）")
-                else:
-                    st.success(f"Reminder saved to database! (#{rid}; total {total})")
+                create_reminder(int(r_day), (r_note or "").strip())
+
+                # ✅ 获取新的总数
+                rows = list_reminders()
+                total = len(rows)
+
+                msg = f"已保存！目前共有 {total} 条提醒。" if is_zh else f"Reminder saved! (Total reminders: {total})"
+                st.success(msg)
+
             except Exception as e:
                 st.error(f"DB error: {e}")
 
@@ -1012,7 +1017,7 @@ elif st.session_state.page == "reminder":
 
             # 每条提醒一个容器；右上角是删除按钮
             with st.container(border=True):
-                left, right = st.columns([0.98, 0.02], vertical_alignment="top")
+                left, right = st.columns([0.95, 0.05], vertical_alignment="top")
 
                 # 左侧：正文
                 with left:
@@ -1034,7 +1039,7 @@ elif st.session_state.page == "reminder":
 
                             # 写入一次性提示信息，然后刷新
                             st.session_state[delete_msg_key] = (
-                                f"已删除提醒（# {r['id']}）。" if is_zh else f"Reminder deleted (#{r['id']})."
+                                f"已删除提醒。" if is_zh else f"Reminder deleted."
                             )
                             st.rerun()
                         except Exception as e:
