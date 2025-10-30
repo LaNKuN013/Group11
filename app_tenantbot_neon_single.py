@@ -900,7 +900,7 @@ elif st.session_state.page == "ticket":
 
 
     # List my tickets / 显示我的报修工单
-    st.subheader("我的报修工单" if is_zh else "My Tickets")
+    # st.subheader("我的报修工单" if is_zh else "My Tickets")
     # try:
     #     rows = list_tickets()
     # except Exception as e:
@@ -931,12 +931,13 @@ elif st.session_state.page == "ticket":
     #                 except Exception as e:
     #                     st.error(f"Delete failed: {e}")
     
+    st.subheader("我的报修工单" if is_zh else "My Tickets")
+    
     ticket_delete_msg_key = "ticket_delete_msg"
     if st.session_state.get(ticket_delete_msg_key):
         st.success(st.session_state[ticket_delete_msg_key])
         st.session_state.pop(ticket_delete_msg_key, None)
-
-    st.subheader("我的报修工单" if is_zh else "My Tickets")
+    
     try:
         rows = list_tickets()
     except Exception as e:
@@ -1070,6 +1071,7 @@ elif st.session_state.page == "reminder":
         st.success(st.session_state[delete_msg_key])
         # 显示一次后立刻清除
         st.session_state.pop(delete_msg_key, None)
+        
 
     # 读取提醒列表
     try:
