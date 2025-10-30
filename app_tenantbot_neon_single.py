@@ -971,6 +971,39 @@ elif st.session_state.page == "reminder":
     #         )
     #         st.caption(f"Created at: {ts_str} (SGT)")
             
+    # st.subheader("当前提醒" if is_zh else "Current Reminders")
+    # try:
+    #     rows = list_reminders()
+    # except Exception as e:
+    #     rows = []
+    #     st.error(f"DB read error: {e}")
+
+    # if not rows:
+    #     st.caption("暂无提醒" if is_zh else "No reminders yet")
+    # else:
+    #     tz = ZoneInfo("Asia/Singapore")
+    #     for r in rows:
+    #         created_local = r["created_at"].astimezone(tz)
+    #         ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
+
+    #         with st.container(border=True):
+    #             st.write(
+    #                 f"每月的第 **{r['day_of_month']}** 天 — {r['note'] or '—'}"
+    #                 if is_zh else
+    #                 f"Every month on day **{r['day_of_month']}** — {r['note'] or '—'}"
+    #             )
+    #             st.caption(f"Created at: {ts_str} (SGT)")
+
+    #             if st.button("❌ 删除" if is_zh else "❌ Delete", key=f"del_reminder_{r['id']}"):
+    #                 try:
+    #                     with get_db_conn() as conn:
+    #                         with conn.cursor() as cur:
+    #                             cur.execute("DELETE FROM rent_reminders WHERE id = %s;", (r["id"],))
+    #                     st.success("已删除！" if is_zh else "Deleted!")
+    #                     st.rerun()
+    #                 except Exception as e:
+    #                     st.error(f"Delete failed: {e}")
+    
     st.subheader("当前提醒" if is_zh else "Current Reminders")
     try:
         rows = list_reminders()
@@ -981,20 +1014,52 @@ elif st.session_state.page == "reminder":
     if not rows:
         st.caption("暂无提醒" if is_zh else "No reminders yet")
     else:
+        # 💅 Trello Card Style CSS
+        st.markdown("""
+        <style>
+            .reminder-card {
+                padding: 16px;
+                border-radius: 12px;
+                background: #ffffff;
+                margin-bottom: 10px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+                position: relative;
+            }
+            .reminder-delete-btn {
+                position: absolute;
+                right: 8px;
+                top: 8px;
+                background: none;
+                border: none;
+                font-size: 18px;
+                color: #444;
+                cursor: pointer;
+            }
+            .reminder-delete-btn:hover {
+                color: red !important;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
         tz = ZoneInfo("Asia/Singapore")
+
         for r in rows:
             created_local = r["created_at"].astimezone(tz)
             ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
 
-            with st.container(border=True):
-                st.write(
-                    f"每月的第 **{r['day_of_month']}** 天 — {r['note'] or '—'}"
-                    if is_zh else
-                    f"Every month on day **{r['day_of_month']}** — {r['note'] or '—'}"
-                )
-                st.caption(f"Created at: {ts_str} (SGT)")
+            card = st.container()
+            with card:
+                st.markdown(f"""
+                <div class="reminder-card">
+                    <button class="reminder-delete-btn" onclick="fetch('/_reminder_delete_{r['id']}')">✖</button>
+                    <h4>📅  {r['day_of_month']} { '日' if is_zh else 'Day of Month' }</h4>
+                    <p>{r['note'] or ('无备注' if is_zh else 'No note')}</p>
+                    <span style="font-size:12px; color: gray;">{ts_str} (SGT)</span>
+                </div>
+                """, unsafe_allow_html=True)
 
-                if st.button("❌ 删除" if is_zh else "❌ Delete", key=f"del_reminder_{r['id']}"):
+                # ✖ button backend hook
+                if st.button("", key=f"rem_del_{r['id']}", help="delete hidden backend button"):
                     try:
                         with get_db_conn() as conn:
                             with conn.cursor() as cur:
