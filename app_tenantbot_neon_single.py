@@ -33,26 +33,6 @@ _LATIN_RE = re.compile(r"[A-Za-z]")
 # Page meta / 页面元信息（标题、图标、布局）
 st.set_page_config(page_title="Tenant Chatbot", page_icon="🤖", layout="wide")
 
-# Change chat_input border color to GREEN
-# st.markdown("""
-# <style>
-# /* 默认状态：保持 Streamlit 原样 */
-# div[data-testid="stChatInput"] > div {
-#   border: inherit !important;
-#   box-shadow: none !important;
-#   transition: border 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-# }
-
-# /* ✅ 只有点击输入框（focus）时才变浅绿色 */
-# div[data-testid="stChatInput"] > div:focus-within {
-#   border: 2px solid #6bd38f !important;   /* 💚 浅绿色边框 */
-#   border-radius: 30px !important;
-#   box-shadow: 0 0 0 3px rgba(107, 211, 143, 0.25) !important;  /* 轻微淡绿发光 */
-# }
-
-# </style>
-# """, unsafe_allow_html=True)
-
 # Initialize session-scoped variables if missing / 首次访问时初始化会话变量
 if "lang" not in st.session_state:
     st.session_state.lang = "en"  # default language / 默认英文
@@ -1005,6 +985,23 @@ elif st.session_state.page == "reminder":
     #                     st.error(f"Delete failed: {e}")
     
     st.subheader("当前提醒" if is_zh else "Current Reminders")
+
+    # 1) 处理通过 ?rem_del=ID 传回来的删除动作（在渲染卡片前执行）
+    qp = st.query_params
+    if "rem_del" in qp:
+        try:
+            rid = int(qp["rem_del"])
+            with get_db_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM rent_reminders WHERE id = %s;", (rid,))
+            st.success("已删除！" if is_zh else "Deleted!")
+        except Exception as e:
+            st.error(f"Delete failed: {e}")
+        # 清掉参数并刷新，这样卡片和地址栏都会干净
+        st.query_params.clear()
+        st.rerun()
+
+    # 2) 读取与展示
     try:
         rows = list_reminders()
     except Exception as e:
@@ -1014,60 +1011,51 @@ elif st.session_state.page == "reminder":
     if not rows:
         st.caption("暂无提醒" if is_zh else "No reminders yet")
     else:
-        # 💅 Trello Card Style CSS
+        # Trello 风格样式 + 右上角 ✖️
         st.markdown("""
         <style>
-            .reminder-card {
-                padding: 16px;
-                border-radius: 12px;
-                background: #ffffff;
-                margin-bottom: 10px;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-                position: relative;
-            }
-            .reminder-delete-btn {
-                position: absolute;
-                right: 8px;
-                top: 8px;
-                background: none;
-                border: none;
-                font-size: 18px;
-                color: #444;
-                cursor: pointer;
-            }
-            .reminder-delete-btn:hover {
-                color: red !important;
-            }
+        .reminder-card {
+            position: relative;
+            padding: 20px 24px;
+            border-radius: 16px;
+            background: #fff;
+            margin-bottom: 14px;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+        }
+        .reminder-title {
+            font-size: 24px; font-weight: 800; margin: 0 0 8px 0;
+        }
+        .reminder-note {
+            font-size: 18px; color: #333; margin: 4px 0 12px 0;
+        }
+        .reminder-ts {
+            font-size: 12px; color: #8a8a8a;
+        }
+        .reminder-x {
+            position: absolute;
+            right: 12px; top: 10px;
+            text-decoration: none;
+            font-size: 20px; font-weight: 700;
+            color: #d33; opacity: .85;
+        }
+        .reminder-x:hover { color: #ff2b2b; opacity: 1; }
         </style>
         """, unsafe_allow_html=True)
 
         tz = ZoneInfo("Asia/Singapore")
-
         for r in rows:
             created_local = r["created_at"].astimezone(tz)
             ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
 
-            card = st.container()
-            with card:
-                st.markdown(f"""
-                <div class="reminder-card">
-                    <button class="reminder-delete-btn" onclick="fetch('/_reminder_delete_{r['id']}')">✖</button>
-                    <h4>📅  {r['day_of_month']} { '日' if is_zh else 'Day of Month' }</h4>
-                    <p>{r['note'] or ('无备注' if is_zh else 'No note')}</p>
-                    <span style="font-size:12px; color: gray;">{ts_str} (SGT)</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                # ✖ button backend hook
-                if st.button("", key=f"rem_del_{r['id']}", help="delete hidden backend button"):
-                    try:
-                        with get_db_conn() as conn:
-                            with conn.cursor() as cur:
-                                cur.execute("DELETE FROM rent_reminders WHERE id = %s;", (r["id"],))
-                        st.success("已删除！" if is_zh else "Deleted!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Delete failed: {e}")
+            # 用 <a href="?rem_del=ID">✖</a> 触发删除；Streamlit 会重跑并在上面捕获参数
+            st.markdown(f"""
+            <div class="reminder-card">
+            <a class="reminder-x" href="?rem_del={r['id']}" title="{'删除' if is_zh else 'Delete'}">✖</a>
+            <h4 class="reminder-title">📅 {r['day_of_month']} { '日' if is_zh else 'Day of Month' }</h4>
+            <div class="reminder-note">{r['note'] or ('无备注' if is_zh else 'No note')}</div>
+            <div class="reminder-ts">{ts_str} (SGT)</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # --- General Chat (offline) / 通用离线聊天 ---
 elif st.session_state.page == "offline":
