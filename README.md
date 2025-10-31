@@ -123,7 +123,7 @@ streamlit run app_tenantbot_neon_single.py
 ```
 or open the hosted app:
 
-🔗 https://dss5105group11.streamlit.app/
+🔗 https://dss5105group11sasadawdqdd.streamlit.app/
 
 
 ---
