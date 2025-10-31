@@ -37,5 +37,28 @@ A single-file **Streamlit** web app that helps tenants with:
 ```bash
 pip install -r requirements.txt
 
-streamlit run app_tenantbot_neon_single.py
+streamlit==1.38.0
+langchain==0.3.0
+langchain-core==0.3.0
+langchain-community==0.3.0
+langchain-openai==0.2.0
+openai>=1.47.0
+faiss-cpu>=1.8.0
+pypdf>=3.17.0
+python-dotenv>=1.0.1
+psycopg2-binary>=2.9.9
+numpy>=1.26.4
+pandas>=2.2.3
+tqdm>=4.66.5
+requests>=2.32.3
+```
+
+---
+## 🧠 RAG Pipeline (Contract Q&A)
+PDF Upload → PyPDFLoader → Text Splitter → OpenAI Embeddings → FAISS Vectorstore
+                     ↓
+          ConversationalRetrievalChain
+                     ↓
+               Contract Answer
+
 
