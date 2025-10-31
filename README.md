@@ -55,10 +55,14 @@ requests>=2.32.3
 
 ---
 ## 🧠 RAG Pipeline (Contract Q&A)
+```text
 PDF Upload → PyPDFLoader → Text Splitter → OpenAI Embeddings → FAISS Vectorstore
-                     ↓
-          ConversationalRetrievalChain
-                     ↓
-               Contract Answer
+               ↓
+        ConversationalRetrievalChain
+               ↓
+           Contract Answer
+```
+
+
 
 
