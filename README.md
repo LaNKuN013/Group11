@@ -24,6 +24,20 @@ A single-file **Streamlit** web app that helps tenants with:
 
 ---
 
+## 🔧 Technical Stack
+
+| Component                | Technology Stack                                                            | Purpose / Usage                                                |
+| ------------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| **Frontend UI**          | Streamlit                                                                   | Web interface (chat, repair tickets, rent reminder management) |
+| **Language Model / RAG** | LangChain + OpenAI (optional)                                               | Contract Q&A (PDF → embedding → vector search)                 |
+| **Vector Store**         | FAISS (local, via LangChain)                                                | Stores embeddings for similarity search                        |
+| **Offline Tenant Chat**  | LangChain `ConversationBufferMemory`                                        | General chat without requiring an API key                      |
+| **Database**             | **Neon PostgreSQL (cloud)**                                                 | Stores repair tickets and rent reminders                       |
+| **Runtime Environment**  | Python 3.10+                                                                | Execution environment                                          |
+| **Dependencies**         | `streamlit`, `langchain`, `openai`, `faiss-cpu`, `psycopg2-binary`, `pypdf` | Required packages for app functionality                        |
+
+---
+
 ## 🛠 Requirements
 
 - Python **3.10+**
@@ -54,6 +68,44 @@ requests>=2.32.3
 ```
 
 ---
+
+## 📁 Project Structure
+```
+📂 Tenant Chatbot Assistant
+│
+├── app_tenantbot_neon_single.py           # Streamlit UI + logic + DB + RAG)
+├── requirements.txt       
+├── README.md              
+│
+├── .env (optional)        # repo：DATABASE_URL / OPENAI_API_KEY
+│
+└── data/ (runtime generated)
+    ├── contract_pdf/      #  PDF (not committed)
+    └── vectorstore/       # FAISS index embedding (not committed)
+```
+
+---
+
+## 🗄 Database Schema (auto-created)
+```sql
+CREATE TABLE IF NOT EXISTS repair_tickets (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS rent_reminders (
+  id SERIAL PRIMARY KEY,
+  day_of_month INT NOT NULL CHECK (day_of_month BETWEEN 1 AND 31),
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
 ## 🧠 RAG Pipeline (Contract Q&A)
 ```text
 PDF Upload → PyPDFLoader → Text Splitter → OpenAI Embeddings → FAISS Vectorstore
@@ -63,6 +115,21 @@ PDF Upload → PyPDFLoader → Text Splitter → OpenAI Embeddings → FAISS Vec
            Contract Answer
 ```
 
+---
 
+## 🚀 Quick Start
+```bush
+streamlit run app_tenantbot_neon_single.py
+```
+or open the hosted app:
+
+🔗 https://dss5105group11.streamlit.app/
+
+
+---
+
+## 📄 License
+
+MIT License — free to use & modify.
 
 
