@@ -13,7 +13,7 @@ A single-file **Streamlit** web app that helps tenants with:
 
 ## ✨ Features
 
-| 功能 | Feature Description |
+| Feature | Feature Description |
 |------|----------------------|
 | 💬 General Chat (offline) | Fast responses, no API needed |
 | 📄 Contract Q&A | Upload tenancy agreement PDF → Build FAISS → Ask questions |
