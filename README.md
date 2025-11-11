@@ -1,14 +1,16 @@
 
 
 
+
 ---
-# Tenant Chatbot Assistant
+
+## Tenant Chatbot Assistant
 
 ### Homepage
 <img width="1439" height="686" alt="Screenshot 2025-11-11 at 23 34 33" src="https://github.com/user-attachments/assets/fd64693d-8741-4417-981d-cc977f0cdec0" />
 
 ### Chat Example
-<img width="1428" height="685" alt="Screenshot 2025-11-11 at 23 45 33" src="https://github.com/user-attachments/assets/d3b7c36a-3801-477d-8af6-beec5fb9784b" />
+<img width="1428" height="685" alt="chatexample.png" src="https://github.com/LaNKuN013/group11/blob/main/READMEimages/chatexample.png" />
 
 A single-file **Streamlit** web app that helps tenants with:
 
