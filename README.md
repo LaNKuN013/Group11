@@ -1,4 +1,9 @@
+
+
+
+
 # Tenant Chatbot Assistant
+
 
 A single-file **Streamlit** web app that helps tenants with:
 
@@ -73,15 +78,20 @@ requests>=2.32.3
 ```
 📂 Tenant Chatbot Assistant
 │
-├── app_tenantbot_neon_single.py           # Streamlit UI + logic + DB + RAG)
-├── requirements.txt       
-├── README.md              
+├── app_tenantbot_neon_single.py        # ✅ Main Streamlit app (UI + logic + DB + RAG in one file)
+├── requirements.txt                    # ✅ Python dependencies (required by Streamlit Cloud)
+├── README.md                           # ✅ Project documentation
 │
-├── .env (optional)        # repo：DATABASE_URL / OPENAI_API_KEY
+├── .env                                # (optional) Environment variables for local development
+│                                        #   - OPENAI_API_KEY
+│                                        #   - DATABASE_URL (Neon / PostgreSQL)
 │
-└── data/ (runtime generated)
-    ├── contract_pdf/      #  PDF (not committed)
-    └── vectorstore/       # FAISS index embedding (not committed)
+├── .streamlit/                         # ✅ Streamlit configuration folder
+│   └── config.toml                     # ✅ UI theme configuration (forces Light mode, prevents black text)
+│
+└── data/                               # Runtime generated folders (DO NOT commit to GitHub)
+    ├── contract_pdf/                   # Temporary folder for uploaded PDFs
+    └── vectorstore/                    # FAISS vector index generated from embeddings for RAG
 ```
 
 ---
