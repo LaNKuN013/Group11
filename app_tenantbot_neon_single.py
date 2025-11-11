@@ -39,6 +39,9 @@ NUS_WHITE = "#f7f9fb"
 # Page meta / 页面元信息（标题、图标、布局）
 st.set_page_config(page_title="Tenant Chatbot", page_icon="🤖", layout="wide")
 
+if not st.session_state.get("css_injected", False):
+    st.session_state["css_injected"] = True
+    st.markdown("""<style> ……你的整段 Sidebar CSS…… </style>""", unsafe_allow_html=True)
 # --- Sidebar CSS overrides / 侧栏 CSS 定制 ---
 st.markdown(f"""
 <style>
@@ -168,6 +171,9 @@ html, body,
 """, unsafe_allow_html=True)
 
 
+if not st.session_state.get("chat_css_injected", False):
+    st.session_state["chat_css_injected"] = True
+    st.markdown("""<style> ……你的聊天 CSS…… </style>""", unsafe_allow_html=True)
 # --- Chat message bubble CSS / 聊天消息气泡 CSS ---
 st.markdown("""
 <style>
@@ -309,33 +315,50 @@ def lazy_import_psycopg():
     except Exception as e:
         raise RuntimeError(f"psycopg2 not available: {e}")
 
-
+@st.cache_resource(show_spinner=False)
 def lazy_import_langchain():
-    """Import LangChain stack lazily for RAG functions.
-    RAG 相关依赖在真正需要时再导入，避免非RAG场景拖慢。"""
-    try:
-        from langchain_community.document_loaders import PyPDFLoader
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
-        from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-        from langchain_community.vectorstores import FAISS
-        from langchain.chains import ConversationalRetrievalChain
-        from langchain.memory import ConversationBufferMemory
-        return {
-            "PyPDFLoader": PyPDFLoader,
-            "RecursiveCharacterTextSplitter": RecursiveCharacterTextSplitter,
-            "OpenAIEmbeddings": OpenAIEmbeddings,
-            "ChatOpenAI": ChatOpenAI,
-            "FAISS": FAISS,
-            "ConversationalRetrievalChain": ConversationalRetrievalChain,
-            "ConversationBufferMemory": ConversationBufferMemory,
-        }
-    except Exception as e:
-        # Surface actionable pip command / 明确提示安装命令
-        raise RuntimeError(
-            "LangChain stack missing. Install:\n"
-            "pip install langchain langchain-openai openai pypdf faiss-cpu\n"
-            f"Details: {e}"
-        )
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+    from langchain_community.vectorstores import FAISS
+    from langchain.chains import ConversationalRetrievalChain
+    from langchain.memory import ConversationBufferMemory
+    return {
+        "PyPDFLoader": PyPDFLoader,
+        "RecursiveCharacterTextSplitter": RecursiveCharacterTextSplitter,
+        "OpenAIEmbeddings": OpenAIEmbeddings,
+        "ChatOpenAI": ChatOpenAI,
+        "FAISS": FAISS,
+        "ConversationalRetrievalChain": ConversationalRetrievalChain,
+        "ConversationBufferMemory": ConversationBufferMemory,
+    }
+    
+# def lazy_import_langchain():
+#     """Import LangChain stack lazily for RAG functions.
+#     RAG 相关依赖在真正需要时再导入，避免非RAG场景拖慢。"""
+#     try:
+#         from langchain_community.document_loaders import PyPDFLoader
+#         from langchain.text_splitter import RecursiveCharacterTextSplitter
+#         from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+#         from langchain_community.vectorstores import FAISS
+#         from langchain.chains import ConversationalRetrievalChain
+#         from langchain.memory import ConversationBufferMemory
+#         return {
+#             "PyPDFLoader": PyPDFLoader,
+#             "RecursiveCharacterTextSplitter": RecursiveCharacterTextSplitter,
+#             "OpenAIEmbeddings": OpenAIEmbeddings,
+#             "ChatOpenAI": ChatOpenAI,
+#             "FAISS": FAISS,
+#             "ConversationalRetrievalChain": ConversationalRetrievalChain,
+#             "ConversationBufferMemory": ConversationBufferMemory,
+#         }
+#     except Exception as e:
+#         # Surface actionable pip command / 明确提示安装命令
+#         raise RuntimeError(
+#             "LangChain stack missing. Install:\n"
+#             "pip install langchain langchain-openai openai pypdf faiss-cpu\n"
+#             f"Details: {e}"
+#         )
 
 # ================== DB helpers (short‑lived conns) / 数据库辅助 ==================
 
@@ -501,37 +524,60 @@ def list_reminders(limit: int = 20):
 
 # ================== RAG helpers / RAG 辅助函数（惰性导入） ==================
 
-def build_vectorstore(uploaded_files):
-    """Load PDFs → split chunks → embed → build FAISS index.
-    将上传的 PDF 加载→切片→嵌入→建立 FAISS 向量库。"""
+# def build_vectorstore(uploaded_files):
+#     """Load PDFs → split chunks → embed → build FAISS index.
+#     将上传的 PDF 加载→切片→嵌入→建立 FAISS 向量库。"""
+#     lc = lazy_import_langchain()
+#     paths = []  # temp paths / 临时文件路径收集
+#     try:
+#         # Save uploads as temp files for PyPDFLoader / 将上传文件写入临时文件
+#         for uf in uploaded_files:
+#             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+#                 tmp.write(uf.getvalue())
+#                 paths.append(tmp.name)
+#         # Load and merge pages / 读取PDF并合并文档
+#         docs = []
+#         for p in paths:
+#             loader = lc["PyPDFLoader"](p)
+#             docs += loader.load()
+#         # Chunking strategy / 文本切片策略
+#         splitter = lc["RecursiveCharacterTextSplitter"](chunk_size=900, chunk_overlap=180)
+#         texts = splitter.split_documents(docs)
+#         # Embedding & index / 嵌入与索引
+#         embeddings = lc["OpenAIEmbeddings"]()  # reads OPENAI_API_KEY / 读取环境变量
+#         vs = lc["FAISS"].from_documents(texts, embeddings)
+#         return vs
+#     finally:
+#         # Always clean temp files / 始终清理临时文件
+#         for p in paths:
+#             try:
+#                 os.unlink(p)
+#             except Exception:
+#                 pass
+
+@st.cache_resource(show_spinner=True)
+def _build_vectorstore_cached(file_blobs: list[bytes]):
     lc = lazy_import_langchain()
-    paths = []  # temp paths / 临时文件路径收集
+    import tempfile, os
+    paths, docs = [], []
     try:
-        # Save uploads as temp files for PyPDFLoader / 将上传文件写入临时文件
-        for uf in uploaded_files:
+        for b in file_blobs:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                tmp.write(uf.getvalue())
-                paths.append(tmp.name)
-        # Load and merge pages / 读取PDF并合并文档
-        docs = []
+                tmp.write(b); paths.append(tmp.name)
         for p in paths:
-            loader = lc["PyPDFLoader"](p)
-            docs += loader.load()
-        # Chunking strategy / 文本切片策略
+            docs += lc["PyPDFLoader"](p).load()
         splitter = lc["RecursiveCharacterTextSplitter"](chunk_size=900, chunk_overlap=180)
         texts = splitter.split_documents(docs)
-        # Embedding & index / 嵌入与索引
-        embeddings = lc["OpenAIEmbeddings"]()  # reads OPENAI_API_KEY / 读取环境变量
-        vs = lc["FAISS"].from_documents(texts, embeddings)
-        return vs
+        embeddings = lc["OpenAIEmbeddings"]()
+        return lc["FAISS"].from_documents(texts, embeddings)
     finally:
-        # Always clean temp files / 始终清理临时文件
         for p in paths:
-            try:
-                os.unlink(p)
-            except Exception:
-                pass
+            try: os.unlink(p)
+            except: pass
 
+def build_vectorstore(uploaded_files):
+    blobs = [uf.getvalue() for uf in uploaded_files]
+    return _build_vectorstore_cached(blobs)
 
 def create_chain(vs):
     """Try lightweight model first, fallback to larger one.
@@ -749,21 +795,37 @@ def guard_language_and_offer_switch(user_text: str) -> bool:
 
     return False
 
-def local_image_base64(path: str) -> str | None:
+@st.cache_data(show_spinner=False)
+def load_avatar_b64(path: str) -> str | None:
     try:
         if not os.path.isabs(path):
-            # 相对脚本目录，避免“Downloads/Downloads/...”问题
             path = os.path.join(os.path.dirname(__file__), path)
         if not os.path.exists(path):
             return None
+        import base64
         with open(path, "rb") as f:
             return "data:image/png;base64," + base64.b64encode(f.read()).decode()
     except Exception:
         return None
 
-# 全局只读一次（放在 import 后）
-ASSISTANT_AVATAR = local_image_base64("chatbot_image.png")  # 放在 .py 同级；或 images/chatbot.png
-USER_AVATAR      = local_image_base64("an7tvcylywfb1.jpg")  # 可选用户头像
+ASSISTANT_AVATAR = load_avatar_b64("chatbot_image.png")
+USER_AVATAR      = load_avatar_b64("an7tvcylywfb1.jpg")
+
+# def local_image_base64(path: str) -> str | None:
+#     try:
+#         if not os.path.isabs(path):
+#             # 相对脚本目录，避免“Downloads/Downloads/...”问题
+#             path = os.path.join(os.path.dirname(__file__), path)
+#         if not os.path.exists(path):
+#             return None
+#         with open(path, "rb") as f:
+#             return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+#     except Exception:
+#         return None
+
+# # 全局只读一次（放在 import 后）
+# ASSISTANT_AVATAR = local_image_base64("chatbot_image.png")  # 放在 .py 同级；或 images/chatbot.png
+# USER_AVATAR      = local_image_base64("an7tvcylywfb1.jpg")  # 可选用户头像
 
 def render_message(role, content, ts=None):
     avatar = (
@@ -785,6 +847,25 @@ def render_message(role, content, ts=None):
         """,
         unsafe_allow_html=True,
     )
+
+
+def render_history(state_key: str, limit: int = 30):
+    """只渲染最近 limit 条消息；必要时再展开更早消息。"""
+    msgs = st.session_state.get(state_key, [])
+    n = len(msgs)
+    start = max(0, n - limit)
+
+    st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+    for m in msgs[start:]:
+        render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    if start > 0:
+        if st.button(f"Show older ({start})", key=f"older_{state_key}"):
+            st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+            for m in msgs[:start]:
+                render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # ======================= Sidebar (single‑page nav) / 侧栏导航 =======================
 with st.sidebar:
@@ -970,10 +1051,12 @@ if st.session_state.page == "chat":
     has_chain = st.session_state.get("chain") is not None
     
     # ✅ 渲染历史
-    st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
-    for m in st.session_state.get("online_msgs", []):
-        render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
-    st.markdown('</div>', unsafe_allow_html=True)
+    # st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+    # for m in st.session_state.get("online_msgs", []):
+    #     render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
+    # st.markdown('</div>', unsafe_allow_html=True)
+    render_history("online_msgs", limit=30)
+
 
     # Chat input / 输入框
     ph_ready = "就你的合同提问…" if is_zh else "Ask about your contract…"
@@ -984,7 +1067,6 @@ if st.session_state.page == "chat":
         key="contract_input"
     )
 
-    # === 从这里开始替换 ===
     if has_chain and user_q:
         # 语言护栏（仅提示，不阻塞历史渲染）
         if guard_language_and_offer_switch(user_q):
@@ -1029,58 +1111,6 @@ if st.session_state.page == "chat":
         st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
         with ans_slot.container():
             render_message("assistant", final_md, ts_ans)
-    # # ===== Chat input / 输入框 =====
-    # ph_ready = "就你的合同提问…" if is_zh else "Ask about your contract…"
-    # ph_build = "请先构建知识库…" if is_zh else "Build the knowledge base first…"
-    # user_q = st.chat_input(ph_ready if has_chain else ph_build,
-    #                     disabled=not has_chain, key="contract_input")
-
-    # # ---- 1) 首次：收到用户输入 → 只记录，不回答（立即刷新显示“用户消息”）----
-    # # 需要的状态键初始化
-    # if "pending_q" not in st.session_state:
-    #     st.session_state.pending_q = None
-
-    # if has_chain and user_q:
-    #     # 语言护栏
-    #     if guard_language_and_offer_switch(user_q):
-    #         st.stop()
-
-    #     ts_user = now_ts()
-    #     st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
-    #     st.session_state.pending_q = user_q  # 标记有一个待回答的问题
-    #     st.rerun()  # 立刻刷新：此时页面只显示到“用户消息”为止
-
-    # # ---- 2) 第二轮：检测到待回答 → 生成答案，写入后再刷新 ----
-    # if has_chain and st.session_state.pending_q:
-    #     q = st.session_state.pending_q
-    #     # 小聊优先，否则走链
-    #     smalltalk = small_talk_zh_basic(q) if is_zh else small_talk_response_basic(q)
-    #     if smalltalk is not None:
-    #         final_md = smalltalk
-    #     else:
-    #         try:
-    #             with st.spinner("正在回答…" if is_zh else "Answering…"):
-    #                 system_hint = (
-    #                     "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
-    #                     if is_zh else
-    #                     "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
-    #                 )
-    #                 query = f"{system_hint}\nQuestion: {q}"
-    #                 resp = st.session_state.chain.invoke({"question": query})
-    #                 final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
-    #         except Exception as e:
-    #             msg = str(e)
-    #             if "insufficient_quota" in msg or "429" in msg:
-    #                 final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
-    #             elif "401" in msg or "invalid_api_key" in msg.lower():
-    #                 final_md = "（API Key 无效）" if is_zh else "Invalid API key."
-    #             else:
-    #                 final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
-
-    #     ts_ans = now_ts()
-    #     st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
-    #     st.session_state.pending_q = None  # 清除待回答标记
-    #     st.rerun()
 
 
 # --- Repair Ticket page / 报修工单 ---
@@ -1265,34 +1295,14 @@ elif st.session_state.page == "offline":
     st.caption("无需 API，仅支持基础闲聊与引导。" if is_zh else "No API required. Small talk and quick help only.")
 
     # ✅ 用气泡 UI 渲染历史消息
-    st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
-    for m in st.session_state.get("offline_msgs", []):
-        render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
-    st.markdown('</div>', unsafe_allow_html=True)
+    # st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+    # for m in st.session_state.get("offline_msgs", []):
+    #     render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
+    # st.markdown('</div>', unsafe_allow_html=True)
+    render_history("offline_msgs", limit=30)
 
-    # Chat input always enabled here / 离线聊天始终可输入
-    # user_q = st.chat_input("打个招呼或问一些基础问题…" if is_zh else
-    #                    "Say hello or ask about some basic information…",
-    #                    key="offline_input")
 
-    # if user_q:
-    #     if guard_language_and_offer_switch(user_q):
-    #         st.stop()
-
-    #     ts_now = now_ts()
-    #     st.session_state.offline_msgs.append({"role": "user", "content": user_q, "ts": ts_now})
-
-    #     is_zh = st.session_state.lang == "zh"
-    #     ans = (small_talk_zh(user_q) if is_zh else small_talk_response(user_q)) or (
-    #         "当前为离线聊天模式。你也可以在侧栏切换到“合同问答”。" if is_zh else
-    #         "I'm in offline chat mode. Use the sidebar to switch features."
-    #     )
-    #     ts_ans = now_ts()
-    #     st.session_state.offline_msgs.append({"role": "assistant", "content": ans, "ts": ts_ans})
-
-    #     # 同样：更新后立即刷新，只让“历史渲染”发生一次
-    #     st.rerun()
-        
+    # Chat input always enabled here / 离线聊天始终可输入 
     user_q = st.chat_input(
         "打个招呼或问一些基础问题…" if is_zh else "Say hello or ask about some basic information…",
         key="offline_input"
