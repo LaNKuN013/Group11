@@ -6,7 +6,7 @@ Real estate is heavily transaction- and relationship-driven. Landlords, agents, 
 ### Problem Statement
 Landlords and property managers spend significant time answering repetitive questions from tenants (rent due dates, maintenance responsibilities, contract clauses). Current solutions (WhatsApp/email/manual calls) are time-consuming and inconsistent.
 
-### Goal: Build a real estate AI system (chatbot) for property inquiries and tenant services. Cloud deployed, with API/UI.
+Goal: Build a real estate AI system (chatbot) for property inquiries and tenant services. Cloud deployed, with API/UI.
 
 ---
 
