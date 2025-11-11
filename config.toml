@@ -1,0 +1,7 @@
+[theme]
+base = "light"                    # 固定浅色，不跟随系统
+primaryColor = "#FF6F0F"
+backgroundColor = "#F2F7FF"       # 你的淡蓝背景
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0B1A33"             # 深色文字
+font = "sans serif"
