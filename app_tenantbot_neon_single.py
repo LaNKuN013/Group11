@@ -975,86 +975,86 @@ if st.session_state.page == "chat":
         render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ===== Chat input / 输入框 =====
+    # Chat input / 输入框
     ph_ready = "就你的合同提问…" if is_zh else "Ask about your contract…"
     ph_build = "请先构建知识库…" if is_zh else "Build the knowledge base first…"
-    user_q = st.chat_input(ph_ready if has_chain else ph_build,
-                        disabled=not has_chain, key="contract_input")
+    user_q = st.chat_input(
+        ph_ready if has_chain else ph_build,
+        disabled=not has_chain,
+        key="contract_input"
+    )
 
-    # ---- 1) 首次：收到用户输入 → 只记录，不回答（立即刷新显示“用户消息”）----
-    # 需要的状态键初始化
-    if "pending_q" not in st.session_state:
-        st.session_state.pending_q = None
-
+    # === 从这里开始替换 ===
     if has_chain and user_q:
-        # 语言护栏
+        # 语言护栏（仅提示，不阻塞历史渲染）
         if guard_language_and_offer_switch(user_q):
             st.stop()
 
+        # 1) 立刻把“用户气泡”加进 state + 画出来（无 rerun）
         ts_user = now_ts()
         st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
-        st.session_state.pending_q = user_q  # 标记有一个待回答的问题
-        st.rerun()  # 立刻刷新：此时页面只显示到“用户消息”为止
+        render_message("user", user_q, ts_user)
 
-    # ---- 2) 第二轮：检测到待回答 → 生成答案，写入后再刷新 ----
-    if has_chain and st.session_state.pending_q:
-        q = st.session_state.pending_q
-        # 小聊优先，否则走链
-        smalltalk = small_talk_zh_basic(q) if is_zh else small_talk_response_basic(q)
-        if smalltalk is not None:
-            final_md = smalltalk
-        else:
-            try:
+        # 2) 预先占个“助手回复”的位置，先显示一个“正在回答…”的气泡
+        ans_slot = st.empty()
+        with ans_slot.container():
+            render_message("assistant", "…", now_ts())  # 你也可以放“Answering…”小点点
+
+        # 3) 计算答案（小聊优先，否则走链）
+        try:
+            smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
+            if smalltalk is not None:
+                final_md = smalltalk
+            else:
+                system_hint = (
+                    "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
+                    if is_zh else
+                    "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
+                )
+                query = f"{system_hint}\nQuestion: {user_q}"
                 with st.spinner("正在回答…" if is_zh else "Answering…"):
-                    system_hint = (
-                        "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
-                        if is_zh else
-                        "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
-                    )
-                    query = f"{system_hint}\nQuestion: {q}"
                     resp = st.session_state.chain.invoke({"question": query})
-                    final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
-            except Exception as e:
-                msg = str(e)
-                if "insufficient_quota" in msg or "429" in msg:
-                    final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
-                elif "401" in msg or "invalid_api_key" in msg.lower():
-                    final_md = "（API Key 无效）" if is_zh else "Invalid API key."
-                else:
-                    final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
+                final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
+        except Exception as e:
+            msg = str(e)
+            if "insufficient_quota" in msg or "429" in msg:
+                final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
+            elif "401" in msg or "invalid_api_key" in msg.lower():
+                final_md = "（API Key 无效）" if is_zh else "Invalid API key."
+            else:
+                final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
 
+        # 4) 更新 state，并把占位气泡替换为正式答案（仍然不 rerun）
         ts_ans = now_ts()
         st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
-        st.session_state.pending_q = None  # 清除待回答标记
-        st.rerun()
-
-    # # ✅✅ 用气泡 UI 渲染历史消息（替换 st.chat_message）
-    # st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
-    # for m in st.session_state.get("online_msgs", []):
-    #     render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
-    # st.markdown('</div>', unsafe_allow_html=True)
-
-    # # Chat input / 输入框
+        with ans_slot.container():
+            render_message("assistant", final_md, ts_ans)
+    # # ===== Chat input / 输入框 =====
     # ph_ready = "就你的合同提问…" if is_zh else "Ask about your contract…"
     # ph_build = "请先构建知识库…" if is_zh else "Build the knowledge base first…"
     # user_q = st.chat_input(ph_ready if has_chain else ph_build,
-    #                    disabled=not has_chain, key="contract_input")
+    #                     disabled=not has_chain, key="contract_input")
 
-    # # if user_q:
-    # #     if guard_language_and_offer_switch(user_q):
-    # #         st.stop()
+    # # ---- 1) 首次：收到用户输入 → 只记录，不回答（立即刷新显示“用户消息”）----
+    # # 需要的状态键初始化
+    # if "pending_q" not in st.session_state:
+    #     st.session_state.pending_q = None
 
     # if has_chain and user_q:
-    # # 语言护栏
+    #     # 语言护栏
     #     if guard_language_and_offer_switch(user_q):
     #         st.stop()
 
     #     ts_user = now_ts()
     #     st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
+    #     st.session_state.pending_q = user_q  # 标记有一个待回答的问题
+    #     st.rerun()  # 立刻刷新：此时页面只显示到“用户消息”为止
 
-    #     # 生成答案（小聊优先，否则走链）
-    #     is_zh = st.session_state.lang == "zh"
-    #     smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
+    # # ---- 2) 第二轮：检测到待回答 → 生成答案，写入后再刷新 ----
+    # if has_chain and st.session_state.pending_q:
+    #     q = st.session_state.pending_q
+    #     # 小聊优先，否则走链
+    #     smalltalk = small_talk_zh_basic(q) if is_zh else small_talk_response_basic(q)
     #     if smalltalk is not None:
     #         final_md = smalltalk
     #     else:
@@ -1065,7 +1065,7 @@ if st.session_state.page == "chat":
     #                     if is_zh else
     #                     "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
     #                 )
-    #                 query = f"{system_hint}\nQuestion: {user_q}"
+    #                 query = f"{system_hint}\nQuestion: {q}"
     #                 resp = st.session_state.chain.invoke({"question": query})
     #                 final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
     #         except Exception as e:
@@ -1079,15 +1079,8 @@ if st.session_state.page == "chat":
 
     #     ts_ans = now_ts()
     #     st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
-
-    #     # 关键：只更新 state，不做即时渲染；直接刷新
+    #     st.session_state.pending_q = None  # 清除待回答标记
     #     st.rerun()
-
-    # if not has_chain:
-    #     st.info(
-    #         "设置 API Key 并构建知识库后开始提问。" if is_zh
-    #         else "Set your API key and build the knowledge base to start asking questions."
-    #     )
 
 
 # --- Repair Ticket page / 报修工单 ---
@@ -1278,27 +1271,50 @@ elif st.session_state.page == "offline":
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Chat input always enabled here / 离线聊天始终可输入
-    user_q = st.chat_input("打个招呼或问一些基础问题…" if is_zh else
-                       "Say hello or ask about some basic information…",
-                       key="offline_input")
+    # user_q = st.chat_input("打个招呼或问一些基础问题…" if is_zh else
+    #                    "Say hello or ask about some basic information…",
+    #                    key="offline_input")
+
     # if user_q:
     #     if guard_language_and_offer_switch(user_q):
     #         st.stop()
-    
+
+    #     ts_now = now_ts()
+    #     st.session_state.offline_msgs.append({"role": "user", "content": user_q, "ts": ts_now})
+
+    #     is_zh = st.session_state.lang == "zh"
+    #     ans = (small_talk_zh(user_q) if is_zh else small_talk_response(user_q)) or (
+    #         "当前为离线聊天模式。你也可以在侧栏切换到“合同问答”。" if is_zh else
+    #         "I'm in offline chat mode. Use the sidebar to switch features."
+    #     )
+    #     ts_ans = now_ts()
+    #     st.session_state.offline_msgs.append({"role": "assistant", "content": ans, "ts": ts_ans})
+
+    #     # 同样：更新后立即刷新，只让“历史渲染”发生一次
+    #     st.rerun()
+        
+    user_q = st.chat_input(
+        "打个招呼或问一些基础问题…" if is_zh else "Say hello or ask about some basic information…",
+        key="offline_input"
+    )
+
     if user_q:
         if guard_language_and_offer_switch(user_q):
             st.stop()
 
-        ts_now = now_ts()
-        st.session_state.offline_msgs.append({"role": "user", "content": user_q, "ts": ts_now})
+        ts_user = now_ts()
+        st.session_state.offline_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
+        render_message("user", user_q, ts_user)
 
-        is_zh = st.session_state.lang == "zh"
+        ans_slot = st.empty()
+        with ans_slot.container():
+            render_message("assistant", "…", now_ts())
+
         ans = (small_talk_zh(user_q) if is_zh else small_talk_response(user_q)) or (
             "当前为离线聊天模式。你也可以在侧栏切换到“合同问答”。" if is_zh else
             "I'm in offline chat mode. Use the sidebar to switch features."
         )
         ts_ans = now_ts()
         st.session_state.offline_msgs.append({"role": "assistant", "content": ans, "ts": ts_ans})
-
-        # 同样：更新后立即刷新，只让“历史渲染”发生一次
-        st.rerun()
+        with ans_slot.container():
+            render_message("assistant", ans, ts_ans)
