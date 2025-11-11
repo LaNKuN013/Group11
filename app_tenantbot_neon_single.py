@@ -810,7 +810,7 @@ def _b64_once(state_key: str, path: str) -> str | None:
         return None
 
 ASSISTANT_AVATAR = _b64_once("avatar_assistant_b64", "chatbot_image.png")
-USER_AVATAR      = _b64_once("avatar_user_b64", "an7tvcylywfb1.jpg")
+USER_AVATAR      = _b64_once("avatar_user_b64", "user_image.jpg")
 
 def render_message(role, content, ts=None):
     avatar = (
