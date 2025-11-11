@@ -17,6 +17,7 @@ Purpose / 作用：
 # =============================== Imports / 导入 ===============================
 import os  # env vars, keys / 读取环境变量与密钥
 import re  # simple text normalization / 文本正则处理
+import base64  # encoding avatars / 头像编码
 import tempfile  # cache uploaded PDFs / 缓存上传PDF的临时文件
 from datetime import datetime  # timestamps / 时间戳
 from zoneinfo import ZoneInfo  # local timezone SGT / 新加坡时区处理
@@ -29,9 +30,225 @@ warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
 
+# --- 主题常量（NUS 配色） ---
+NUS_BLUE = "#00205B"
+NUS_ORANGE = "#FF6F0F"
+NUS_WHITE = "#f7f9fb"
+
 # ================== Global lightweight state / 全局轻量状态 ==================
 # Page meta / 页面元信息（标题、图标、布局）
 st.set_page_config(page_title="Tenant Chatbot", page_icon="🤖", layout="wide")
+
+# --- Sidebar CSS overrides / 侧栏 CSS 定制 ---
+st.markdown(f"""
+<style>
+:root {{
+  --nus-blue: {NUS_BLUE};
+  --nus-orange: {NUS_ORANGE};
+  --nus-white: {NUS_WHITE};
+}}
+
+/* Sidebar 背景 */
+[data-testid="stSidebar"] {{
+  background-color: var(--nus-blue) !important;
+}}
+
+/* Sidebar 标题/说明默认橘色 */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] h5,
+[data-testid="stSidebar"] h6,
+[data-testid="stSidebar"] p:not(.keep-white) {{
+  color: var(--nus-orange) !important;
+  font-weight: 600;
+}}
+
+/* English / 中文 文本设为白色 */
+[data-testid="stSidebar"] div[role="radiogroup"] label p {{
+  color: #fff !important;
+  font-weight: 700 !important;
+}}
+
+/* Upload PDFs 提示文本设为白色 */
+[data-testid="stSidebar"] .stMarkdown p.keep-white,
+[data-testid="stSidebar"] .stMarkdown:last-child p {{
+  color: #fff !important;
+}}
+
+/* ==== Sidebar Buttons ==== */
+[data-testid="stSidebar"] .stButton > button {{
+  background-color: var(--nus-white) !important;
+  color: black !important;
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+}}
+[data-testid="stSidebar"] .stButton > button * {{
+  color: black !important;
+  fill: black !important;
+}}
+
+[data-testid="stSidebar"] .stButton > button:hover {{
+  background-color: var(--nus-orange) !important;
+  color: white !important;
+  transition: none !important;
+}}
+[data-testid="stSidebar"] .stButton > button:hover * {{
+  color: white !important;
+  fill: white !important;
+}}
+
+/* ==== Expander：折叠前白色 / 展开后蓝色 ==== */
+[data-testid="stSidebar"] [data-testid="stExpander"] {{
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  margin-top: 10px !important;
+  border: none !important;
+}}
+
+/* 未展开：白色 header + 橘色字 */
+[data-testid="stSidebar"] [data-testid="stExpander"] summary {{
+   background-color: var(--nus-white) !important;
+   border-radius: 16px !important;
+   padding: 12px !important;
+   color: var(--nus-orange) !important;
+   font-weight: 700 !important;
+   /* remove transitions to avoid flash on rerun */
+   transition: none !important;
+}}
+[data-testid="stSidebar"] [data-testid="stExpander"] summary * {{
+  color: var(--nus-orange) !important;
+  fill: var(--nus-orange) !important;
+}}
+
+/* 展开后：蓝色 header + 白字 */
+[data-testid="stSidebar"] [data-testid="stExpander"][open] summary {{
+   background-color: var(--nus-blue) !important;
+   color: #fff !important;
+   transition: none !important;
+}}
+[data-testid="stSidebar"] [data-testid="stExpander"][open] summary * {{
+  color: #fff !important;
+  fill: #fff !important;
+}}
+
+/* 输入框取消橙色边框，改成淡灰色 */
+[data-testid="stSidebar"] input {{
+  background-color: #ffffff !important;
+  color: var(--nus-blue) !important;
+  border-radius: 10px !important;
+  border: 1.5px solid #dcdcdc !important;
+  font-weight: 600 !important;
+}}
+
+/* Diagnostics / API Setup 里的按钮保持白底黑字 */
+[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button {{
+  background-color: #fff !important;
+  color: #000 !important;
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+}}
+
+/* ===== 右侧主内容背景改为淡蓝 ===== */
+html, body,
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stAppViewContainer"] > .main,
+[data-testid="stVerticalBlock"] .block-container {{
+  background-color: #F2F7FF !important;  /* 淡蓝 */
+}}
+
+/* 顶部 header 也用淡蓝（如果你看到顶部一条白带） */
+[data-testid="stHeader"] {{
+  background: #F2F7FF !important;
+}}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# --- Chat message bubble CSS / 聊天消息气泡 CSS ---
+st.markdown("""
+<style>
+
+/* 让消息（头像 + 气泡）左右排列，并且垂直居中对齐 */
+.msg{
+  display:flex;
+  flex-direction:row;
+  align-items:center;        /* ✅ 头像和气泡垂直方向对齐（关键） */
+  gap:14px;
+  margin:18px 0;
+}
+
+/* 用户消息反向排列（头像在右）*/
+.msg[data-role="user"]{
+  flex-direction:row-reverse;
+}
+
+/* 头像固定大小，不被压缩 */
+.avatar{
+  width:64px; height:64px;
+  min-width:64px;
+  border-radius:50%;
+  overflow:hidden;
+  border:3px solid transparent;
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* 边框颜色 */
+.msg[data-role="assistant"] .avatar{ border-color:#00205B; }
+.msg[data-role="user"]      .avatar{ border-color:#FF6F0F; }
+
+/* 头像图像填充圆形 */
+.avimg{
+  width:100%; height:100%;
+  object-fit:cover;
+  border-radius:50%;
+}
+
+/* ✅ 气泡区域在垂直方向上用 column，使 timestamp 跟气泡绑在一起 */
+.bubble-wrap{
+  display:flex;
+  flex-direction:column;
+  max-width:min(70vw, 900px);
+}
+
+/* 氣泡 */
+.bubble{
+  padding:14px 18px;
+  border-radius:20px;
+  font-size:1.08rem;
+  line-height:1.55;
+  box-shadow:0 5px 15px rgba(0,0,0,.12);
+  white-space:pre-wrap;
+}
+
+/* 配色 */
+.msg[data-role="assistant"] .bubble{
+  background:#00205B; color:#fff;
+}
+.msg[data-role="user"] .bubble{
+  background:#FF6F0F; color:#fff;
+}
+
+/* ✅ 时间戳必须跟随 bubble，而不是跟随 avatar */
+.meta{
+  font-size:12px; opacity:.6;
+  margin-top:6px;
+}
+
+/* ✅ 时间戳根据不同角色左右对齐 */
+.msg[data-role="assistant"] .meta{
+  align-self:flex-start;     /* 左边消息时间戳靠左 */
+}
+.msg[data-role="user"] .meta{
+  align-self:flex-end;       /* 右边消息时间戳靠右 */
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 
 # Initialize session-scoped variables if missing / 首次访问时初始化会话变量
 if "lang" not in st.session_state:
@@ -78,12 +295,6 @@ def apply_chat_input_visibility():
         """,
         unsafe_allow_html=True,
     )
-
-# def clear_chat_history():
-#     """Clear both online/offline chat transcripts.
-#     清空在线/离线两种会话记录。"""
-#     st.session_state.offline_msgs = []
-#     st.session_state.online_msgs = []
 
 # =============== Lazy imports / 惰性导入（用到才加载依赖） ===============
 
@@ -224,16 +435,6 @@ def init_db():
 
 
 # CRUD helpers / 简单的新增-查询-清空操作
-
-# def create_ticket(title: str, desc: str):
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)
-#         with conn.cursor() as cur:
-#             cur.execute(
-#                 "INSERT INTO repair_tickets (title, description, status) VALUES (%s, %s, %s) RETURNING id;",
-#                 (title, desc, "open"),
-#             )
-#             return cur.fetchone()["id"]
         
 def create_ticket(title: str, desc: str):
     with get_db_conn() as conn:
@@ -266,26 +467,6 @@ def list_tickets(limit: int = 50):
             )
             return cur.fetchall()
         
-
-
-
-# def clear_tickets():
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)
-#         with conn.cursor() as cur:
-#             cur.execute("TRUNCATE TABLE repair_tickets RESTART IDENTITY;")
-
-
-# def create_reminder(day_of_month: int, note: str):
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)
-#         with conn.cursor() as cur:
-#             cur.execute(
-#                 "INSERT INTO rent_reminders (day_of_month, note) VALUES (%s, %s) RETURNING id;",
-#                 (day_of_month, note),
-#             )
-#             return cur.fetchone()["id"]
-        
 def create_reminder(day_of_month: int, note: str):
     with get_db_conn() as conn:
         ensure_schema(conn)
@@ -316,12 +497,6 @@ def list_reminders(limit: int = 20):
             )
             return cur.fetchall()
 
-
-# def clear_reminders():
-#     with get_db_conn() as conn:
-#         ensure_schema(conn)
-#         with conn.cursor() as cur:
-#             cur.execute("TRUNCATE TABLE rent_reminders RESTART IDENTITY;")
 
 
 # ================== RAG helpers / RAG 辅助函数（惰性导入） ==================
@@ -574,18 +749,44 @@ def guard_language_and_offer_switch(user_text: str) -> bool:
 
     return False
 
-# ======================= Sidebar (single‑page nav) / 侧栏导航 =======================
-# Minor CSS for soft blue buttons / 轻量蓝色按钮样式
-st.markdown(
-    """
-<style>
-.sidebar-btn {width:100%; text-align:left; background:#e3f2fd; border:none; padding:0.5rem 1rem; border-radius:0.5rem; margin:0.2rem 0;}
-.sidebar-btn:hover {background:#bbdefb;}
-</style>
-""",
-    unsafe_allow_html=True,
-)
+def local_image_base64(path: str) -> str | None:
+    try:
+        if not os.path.isabs(path):
+            # 相对脚本目录，避免“Downloads/Downloads/...”问题
+            path = os.path.join(os.path.dirname(__file__), path)
+        if not os.path.exists(path):
+            return None
+        with open(path, "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+    except Exception:
+        return None
 
+# 全局只读一次（放在 import 后）
+ASSISTANT_AVATAR = local_image_base64("chatbot_image.png")  # 放在 .py 同级；或 images/chatbot.png
+USER_AVATAR      = local_image_base64("an7tvcylywfb1.jpg")  # 可选用户头像
+
+def render_message(role, content, ts=None):
+    avatar = (
+        f"<img src='{ASSISTANT_AVATAR}' class='avimg' />"
+        if role == "assistant"
+        else f"<img src='{USER_AVATAR}' class='avimg' />"
+        if USER_AVATAR else "<div class='avemoji'>🧑</div>"
+    )
+
+    st.markdown(
+        f"""
+        <div class="msg" data-role="{role}">
+            <div class="avatar">{avatar}</div>
+            <div class="bubble-wrap">
+                <div class="bubble">{content}</div>
+                <div class="meta">{ts}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+# ======================= Sidebar (single‑page nav) / 侧栏导航 =======================
 with st.sidebar:
     # Language toggle / 语言切换
     st.header("🌐 Language / 语言")
@@ -604,24 +805,37 @@ with st.sidebar:
         btn_ticket = "🧰 Create Repair Ticket"
         btn_reminder = "💰 Create Rent Reminder"
         caption_text = "Upload PDFs anytime. Build the knowledge base after setting OPENAI_API_KEY below."
-        api_expander_label = "API Setup" # (for Contract Chat)"
-        api_hint = "API key set for this session."
+        tab_api_title = "API Setup"
+        api_key_label  = "OpenAI API Key"
         clear_label = "🧹 Clear Chat"
         cleared_offline_msg = "Cleared General Chat history."
         cleared_online_msg = "Cleared Contract Chat history."
         nothing_here_msg = "Nothing to clear on this page."
+        tab_api_title  = "API Setup"
+        tab_diag_title = "🧪 Diagnostics"
+        api_key_label  = "OpenAI API Key"
+        diag_btn_label = "Test Neon connection"
+        db_ok, db_ng   = "DB connected ✔️", "DB connect failed: "
+        api_seen_label = "API Key detected: "
     else:
         btn_general = "💬 普通聊天"
         btn_contract = "💬 合同问答"
         btn_ticket = "🧰 报修创建"
         btn_reminder = "💰 房租提醒"
         caption_text = "可随时上传 PDF。先在下方设置 OPENAI_API_KEY 再构建知识库。"
-        api_expander_label = "API 设置" #（用于合同问答）"
-        api_hint = "API 密钥已设置。"
+        tab_api_title = "API 设置"
+        api_key_label  = "OpenAI API 密钥"
         clear_label = "🧹 清空聊天"
         cleared_offline_msg = "已清空『普通聊天』历史。"
         cleared_online_msg = "已清空『合同问答』历史。"
         nothing_here_msg = "此页面没有可清空的聊天记录。"
+        tab_api_title  = "API 设置"
+        tab_diag_title = "🧪 诊断"
+        api_key_label  = "OpenAI API 密钥"
+        diag_btn_label = "测试 Neon 数据库连接"
+        db_ok, db_ng   = "数据库连接成功 ✔️", "数据库连接失败："
+        api_seen_label = "检测到 API Key："
+
 
     # Navigation buttons / 导航按钮
     if st.button(btn_general, use_container_width=True):
@@ -633,13 +847,28 @@ with st.sidebar:
     if st.button(btn_reminder, use_container_width=True):
         st.session_state.page = "reminder"
 
-    # --- API Setup expander / API 设置折叠面板 ---
-    with st.expander(api_expander_label):
-        api_key_in = st.text_input("OpenAI API Key", type="password")
+
+
+    api_tab, diag_tab = st.tabs([tab_api_title, tab_diag_title])
+
+    with api_tab:
+        api_key_in = st.text_input(api_key_label, type="password", key="api_key_input")  # 稳定 key
         if api_key_in:
-            os.environ["OPENAI_API_KEY"] = api_key_in  # set for this run / 会话内设置
-            st.success(api_hint)
+            os.environ["OPENAI_API_KEY"] = api_key_in
+            st.success("API key set for this session." if st.session_state.lang=="en" else "API 密钥已设置。")
+
     
+    with diag_tab:
+        if st.button(diag_btn_label, key="btn_test_neon"):  # 稳定 key
+            try:
+                with get_db_conn() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT NOW();")
+                st.success(db_ok)
+            except Exception as e:
+                st.error(db_ng + str(e))
+        st.write(api_seen_label + str(bool(os.getenv("OPENAI_API_KEY"))))
+        
     # Clear Chat (scoped to current page) / 仅清“当前页面”的聊天记录
     # - 在 General(offline) 页面只清离线消息
     # - 在 Contract(chat) 页面只清在线(RAG)消息
@@ -657,33 +886,7 @@ with st.sidebar:
 
     st.caption(caption_text)
     st.divider()
-
-    # --- Diagnostics (on demand) / 诊断工具（按需） ---
-    if st.session_state.lang == "zh":
-        diag_label = "🧪 诊断（按需执行）"
-        test_label = "测试 Neon 数据库连接"
-        db_success = "数据库连接成功 ✔️"
-        db_fail = "数据库连接失败："
-        api_label = "检测到 API Key："
-    else:
-        diag_label = "🧪 Diagnostics (on-demand)"
-        test_label = "Test Neon connection"
-        db_success = "DB connected ✔️"
-        db_fail = "DB connect failed: "
-        api_label = "API Key detected:"
-
-    with st.expander(diag_label):
-        # Quick DB liveness check / 快速数据库连通性检查
-        if st.button(test_label):
-            try:
-                with get_db_conn() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("SELECT NOW();")
-                st.success(db_success)
-            except Exception as e:
-                st.error(f"{db_fail}{e}")
-        # Show whether API key present / 显示是否设置了API密钥
-        st.write(f"{api_label} {bool(os.getenv('OPENAI_API_KEY'))}")
+    
 
 # After sidebar is drawn, toggle chat input visibility / 渲染侧栏后立刻控制输入框显隐
 apply_chat_input_visibility()
@@ -709,13 +912,11 @@ if st.session_state.page == "chat":
         st.session_state.kb_doc_names = [f.name for f in uploaded]  # 保存文件名
         st.session_state.pdf_uploaded = True
 
-
     # ✅ 显示已上传/已构建 PDF 文件名（切换页面不会消失）
     if st.session_state.pdf_uploaded and st.session_state.kb_doc_names:
         st.caption("已选择的文件：" if is_zh else "Selected PDFs:")
         for nm in st.session_state.kb_doc_names:
             st.markdown(f"**{nm}**")
-
 
     # ===== Build & Reset 按钮显示逻辑 =====
     if st.session_state.pdf_uploaded:
@@ -725,25 +926,14 @@ if st.session_state.page == "chat":
         clicked = st.button(
             "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
             disabled=build_disabled,
-            help=(
-                "请先设置 OPENAI_API_KEY" if build_disabled else "根据 PDF 构建 FAISS 索引"
-            ) if is_zh else (
-                "Set OPENAI_API_KEY first" if build_disabled else "Build FAISS index from PDFs"
-            ),
             use_container_width=True,
         )
 
         reset_clicked = st.button(
             "♻️ 重置知识库" if is_zh else "♻️ Reset Knowledge Base",
-            disabled=build_disabled,  # 未设置 API key 同样禁用
-            help=(
-                "请先设置 OPENAI_API_KEY" if build_disabled else "清空向量库和聊天记录"
-            ) if is_zh else (
-                "Set OPENAI_API_KEY first" if build_disabled else "Clear embeddings and chat history"
-            ),
+            disabled=build_disabled,
             use_container_width=True,
         )
-
 
         # ===== Build index / 构建知识库 =====
         if clicked:
@@ -756,20 +946,15 @@ if st.session_state.page == "chat":
                     st.session_state.chain = create_chain(vs)
 
                 st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
-        
+
+        # ===== Reset Knowledge Base / 重置知识库 =====
         if reset_clicked:
-            # 1) 移除向量库与链
             st.session_state.pop("vectorstore", None)
             st.session_state.pop("chain", None)
-
-            # 2) 清 PDF 状态（文件名与“已上传”标记）
             st.session_state["kb_doc_names"] = []
             st.session_state["pdf_uploaded"] = False
+            st.session_state["online_msgs"] = []  # ✅ 清理合同问答聊天记录
 
-            # 3) 只清【合同问答】的聊天记录
-            st.session_state["online_msgs"] = []
-
-            # 4) 如果链带有 memory，则一并清空（容错）
             chain = st.session_state.get("chain")
             if chain and getattr(chain, "memory", None):
                 try:
@@ -777,76 +962,133 @@ if st.session_state.page == "chat":
                 except Exception:
                     pass
 
-            # 5) 重置 file_uploader（通过改变 key 来清空控件）
-            st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
-
-            # 6) 提示并立即刷新，让“Selected PDFs”立刻消失
+            st.session_state["uploader_key"] += 1
             st.toast("知识库与合同聊天已清空。" if is_zh else "Knowledge base & contract chat cleared.")
             st.rerun()
 
     # Whether RAG chain exists / 是否已建链
     has_chain = st.session_state.get("chain") is not None
-
-    # Render previous messages / 渲染历史消息
+    
+    # ✅ 渲染历史
+    st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
     for m in st.session_state.get("online_msgs", []):
-        with st.chat_message(m["role"]):
-            if m.get("ts"):
-                st.caption(m["ts"])
-            st.markdown(m["content"])
+        render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Chat input: enabled only when built / 输入框：仅在已建库时可用
+    # ===== Chat input / 输入框 =====
     ph_ready = "就你的合同提问…" if is_zh else "Ask about your contract…"
     ph_build = "请先构建知识库…" if is_zh else "Build the knowledge base first…"
-    user_q = st.chat_input(ph_ready if has_chain else ph_build, disabled=not has_chain)
+    user_q = st.chat_input(ph_ready if has_chain else ph_build,
+                        disabled=not has_chain, key="contract_input")
 
-    if user_q:
+    # ---- 1) 首次：收到用户输入 → 只记录，不回答（立即刷新显示“用户消息”）----
+    # 需要的状态键初始化
+    if "pending_q" not in st.session_state:
+        st.session_state.pending_q = None
+
+    if has_chain and user_q:
+        # 语言护栏
         if guard_language_and_offer_switch(user_q):
             st.stop()
 
-    if has_chain and user_q:
         ts_user = now_ts()
         st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
-        with st.chat_message("user"):
-            st.caption(ts_user)
-            st.markdown(user_q)
+        st.session_state.pending_q = user_q  # 标记有一个待回答的问题
+        st.rerun()  # 立刻刷新：此时页面只显示到“用户消息”为止
 
-        # Small talk fallback when not really a contract query / 若非合同问题先用闲聊应答
-        smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
+    # ---- 2) 第二轮：检测到待回答 → 生成答案，写入后再刷新 ----
+    if has_chain and st.session_state.pending_q:
+        q = st.session_state.pending_q
+        # 小聊优先，否则走链
+        smalltalk = small_talk_zh_basic(q) if is_zh else small_talk_response_basic(q)
         if smalltalk is not None:
             final_md = smalltalk
         else:
-            # Call ConversationalRetrievalChain / 调用RAG链
-            with st.spinner("正在回答…" if is_zh else "Answering…"):
-                try:
+            try:
+                with st.spinner("正在回答…" if is_zh else "Answering…"):
                     system_hint = (
                         "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
                         if is_zh else
-                        "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents. "
-                        "If the answer isn't present in the documents, say you don't have enough information."
+                        "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
                     )
-                    query = f"{system_hint}\nQuestion: {user_q}"
-                    resp = st.session_state.chain.invoke({"question": query})  # LangChain invoke API / 调用接口
+                    query = f"{system_hint}\nQuestion: {q}"
+                    resp = st.session_state.chain.invoke({"question": query})
                     final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
-                except Exception as e:
-                    msg = str(e)
-                    if "insufficient_quota" in msg or "429" in msg:
-                        final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
-                    elif "401" in msg or "invalid_api_key" in msg.lower():
-                        final_md = "（API Key 无效）" if is_zh else "Invalid API key."
-                    else:
-                        final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
+            except Exception as e:
+                msg = str(e)
+                if "insufficient_quota" in msg or "429" in msg:
+                    final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
+                elif "401" in msg or "invalid_api_key" in msg.lower():
+                    final_md = "（API Key 无效）" if is_zh else "Invalid API key."
+                else:
+                    final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
 
         ts_ans = now_ts()
         st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
-        with st.chat_message("assistant"):
-            st.caption(ts_ans)
-            st.markdown(final_md)
+        st.session_state.pending_q = None  # 清除待回答标记
+        st.rerun()
 
-    if not has_chain:
-        st.info(
-            "设置 API Key 并构建知识库后开始提问。" if is_zh
-            else "Set your API key and build the knowledge base to start asking questions."
-        )
+    # # ✅✅ 用气泡 UI 渲染历史消息（替换 st.chat_message）
+    # st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+    # for m in st.session_state.get("online_msgs", []):
+    #     render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
+    # st.markdown('</div>', unsafe_allow_html=True)
+
+    # # Chat input / 输入框
+    # ph_ready = "就你的合同提问…" if is_zh else "Ask about your contract…"
+    # ph_build = "请先构建知识库…" if is_zh else "Build the knowledge base first…"
+    # user_q = st.chat_input(ph_ready if has_chain else ph_build,
+    #                    disabled=not has_chain, key="contract_input")
+
+    # # if user_q:
+    # #     if guard_language_and_offer_switch(user_q):
+    # #         st.stop()
+
+    # if has_chain and user_q:
+    # # 语言护栏
+    #     if guard_language_and_offer_switch(user_q):
+    #         st.stop()
+
+    #     ts_user = now_ts()
+    #     st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
+
+    #     # 生成答案（小聊优先，否则走链）
+    #     is_zh = st.session_state.lang == "zh"
+    #     smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
+    #     if smalltalk is not None:
+    #         final_md = smalltalk
+    #     else:
+    #         try:
+    #             with st.spinner("正在回答…" if is_zh else "Answering…"):
+    #                 system_hint = (
+    #                     "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
+    #                     if is_zh else
+    #                     "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
+    #                 )
+    #                 query = f"{system_hint}\nQuestion: {user_q}"
+    #                 resp = st.session_state.chain.invoke({"question": query})
+    #                 final_md = resp.get("answer", "（暂无答案）" if is_zh else "(no answer)")
+    #         except Exception as e:
+    #             msg = str(e)
+    #             if "insufficient_quota" in msg or "429" in msg:
+    #                 final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
+    #             elif "401" in msg or "invalid_api_key" in msg.lower():
+    #                 final_md = "（API Key 无效）" if is_zh else "Invalid API key."
+    #             else:
+    #                 final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
+
+    #     ts_ans = now_ts()
+    #     st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
+
+    #     # 关键：只更新 state，不做即时渲染；直接刷新
+    #     st.rerun()
+
+    # if not has_chain:
+    #     st.info(
+    #         "设置 API Key 并构建知识库后开始提问。" if is_zh
+    #         else "Set your API key and build the knowledge base to start asking questions."
+    #     )
+
 
 # --- Repair Ticket page / 报修工单 ---
 elif st.session_state.page == "ticket":
@@ -854,26 +1096,6 @@ elif st.session_state.page == "ticket":
     st.title("🧰 创建报修工单" if is_zh else "🧰 Create Repair Ticket")
 
     # Submit ticket form / 提交报修表单
-    # with st.form("ticket_form", clear_on_submit=True):
-    #     t_title = st.text_input(
-    #         "问题标题" if is_zh else "Issue title",
-    #         placeholder="厨房水槽漏水" if is_zh else "Leaking sink in kitchen",
-    #     )
-    #     t_desc = st.text_area(
-    #         "问题描述" if is_zh else "Description",
-    #         placeholder="请描述具体情况…" if is_zh else "Describe the issue…",
-    #     )
-    #     submitted = st.form_submit_button("📨 提交报修" if is_zh else "📨 Submit Ticket")
-    #     if submitted:
-    #         if not t_title.strip():
-    #             st.warning("请填写问题标题。" if is_zh else "Please enter a title.")
-    #         else:
-    #             try:
-    #                 new_id = create_ticket(t_title.strip(), t_desc.strip())
-    #                 st.success(("报修已保存到数据库！" if is_zh else "Ticket saved to database!") + f"  (#{new_id})")
-    #             except Exception as e:
-    #                 st.error(f"DB error: {e}")
-    
     with st.form("ticket_form", clear_on_submit=True):
         t_title = st.text_input(
             "问题标题" if is_zh else "Issue title",
@@ -900,37 +1122,6 @@ elif st.session_state.page == "ticket":
 
 
     # List my tickets / 显示我的报修工单
-    # st.subheader("我的报修工单" if is_zh else "My Tickets")
-    # try:
-    #     rows = list_tickets()
-    # except Exception as e:
-    #     rows = []
-    #     st.error(f"DB read error: {e}")
-
-    # if not rows:
-    #     st.caption("暂无工单" if is_zh else "No tickets yet")
-    # else:
-    #     tz = ZoneInfo("Asia/Singapore")
-    #     for r in rows:
-    #         created_local = r["created_at"].astimezone(tz)
-    #         ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
-
-    #         with st.container(border=True):
-    #             st.markdown(f"**#{r['id']} – {r['title']}** — _{r['status']}_")
-    #             if r["description"]:
-    #                 st.caption(r["description"])
-    #             st.caption(f"Created at: {ts_str} (SGT)")
-
-    #             if st.button("❌ 删除" if is_zh else "❌ Delete", key=f"del_ticket_{r['id']}"):
-    #                 try:
-    #                     with get_db_conn() as conn:
-    #                         with conn.cursor() as cur:
-    #                             cur.execute("DELETE FROM repair_tickets WHERE id = %s;", (r["id"],))
-    #                     st.success("已删除！" if is_zh else "Deleted!")
-    #                     st.rerun()
-    #                 except Exception as e:
-    #                     st.error(f"Delete failed: {e}")
-    
     st.subheader("我的报修工单" if is_zh else "My Tickets")
     
     ticket_delete_msg_key = "ticket_delete_msg"
@@ -993,20 +1184,6 @@ elif st.session_state.page == "reminder":
     st.title("💰 创建房租提醒" if is_zh else "💰 Create Rent Reminder")
 
     # Create reminder form / 创建提醒表单
-    # with st.form("reminder_form", clear_on_submit=True):
-    #     r_day = st.number_input("每月几号" if is_zh else "Due day of month", 1, 31, 1)
-    #     r_note = st.text_input(
-    #         "备注" if is_zh else "Note",
-    #         placeholder="通过银行卡尾号••1234转账" if is_zh else "Pay via bank transfer ending ••1234",
-    #     )
-    #     r_submit = st.form_submit_button("💾 保存提醒" if is_zh else "💾 Save Reminder")
-    #     if r_submit:
-    #         try:
-    #             rid = create_reminder(int(r_day), (r_note or "").strip())
-    #             st.success(("提醒已保存到数据库！" if is_zh else "Reminder saved to database!") + f"  (#{rid})")
-    #         except Exception as e:
-    #             st.error(f"DB error: {e}")
-    
     with st.form("reminder_form", clear_on_submit=True):
         r_day = st.number_input("每月几号" if is_zh else "Due day of month", 1, 31, 1)
         r_note = st.text_input(
@@ -1031,37 +1208,6 @@ elif st.session_state.page == "reminder":
                 st.error(f"DB error: {e}")
 
     # List reminders / 展示提醒列表
-    # st.subheader("当前提醒" if is_zh else "Current Reminder")
-    # if st.button("🗑️ 清除所有提醒" if is_zh else "🗑️ Clear All Reminders"):
-    #     try:
-    #         clear_reminders()
-    #         st.success("已清空！" if is_zh else "All reminders deleted!")
-    #         st.rerun()
-    #     except Exception as e:
-    #         st.error(f"DB delete error: {e}")
-
-    # try:
-    #     rows = list_reminders()
-    # except Exception as e:
-    #     rows = []
-    #     st.error(f"DB read error: {e}")
-
-    # if not rows:
-    #     st.caption("暂无提醒" if is_zh else "No reminders yet")
-    # else:
-    #     tz = ZoneInfo("Asia/Singapore")
-    #     for r in rows:
-    #         created_local = r["created_at"].astimezone(tz)
-    #         ts_str = created_local.strftime("%Y-%m-%d %H:%M:%S")
-    #         st.write(
-    #             f"每月的第 **{r['day_of_month']}** 天 — {r['note'] or '—'}"
-    #             if is_zh
-    #             else f"Every month on day **{r['day_of_month']}** — {r['note'] or '—'}"
-    #         )
-    #         st.caption(f"Created at: {ts_str} (SGT)")
-    
-    #st.subheader("当前提醒" if is_zh else "Current Reminders")
-    
     st.subheader("当前提醒" if is_zh else "Current Reminders")
 
     # ========== Flash banner for delete success / 删除成功后的一次性提示 ==========
@@ -1125,32 +1271,34 @@ elif st.session_state.page == "offline":
     st.title("💬 通用离线聊天" if is_zh else "💬 General Chat (Offline)")
     st.caption("无需 API，仅支持基础闲聊与引导。" if is_zh else "No API required. Small talk and quick help only.")
 
-    # Show prior messages / 显示历史消息
-    for m in st.session_state.offline_msgs:
-        with st.chat_message(m["role"]):
-            if m.get("ts"):
-                st.caption(m["ts"])
-            st.markdown(m["content"])
+    # ✅ 用气泡 UI 渲染历史消息
+    st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+    for m in st.session_state.get("offline_msgs", []):
+        render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Chat input always enabled here / 离线聊天始终可输入
-    user_q = st.chat_input("打个招呼或问一些基础问题…" if is_zh else "Say hello or ask about some basic information…")
+    user_q = st.chat_input("打个招呼或问一些基础问题…" if is_zh else
+                       "Say hello or ask about some basic information…",
+                       key="offline_input")
+    # if user_q:
+    #     if guard_language_and_offer_switch(user_q):
+    #         st.stop()
+    
     if user_q:
         if guard_language_and_offer_switch(user_q):
             st.stop()
 
-    if user_q:
         ts_now = now_ts()
         st.session_state.offline_msgs.append({"role": "user", "content": user_q, "ts": ts_now})
-        with st.chat_message("user"):
-            st.caption(ts_now)
-            st.markdown(user_q)
-        # Answer with small‑talk templates / 用闲聊模板回答
+
+        is_zh = st.session_state.lang == "zh"
         ans = (small_talk_zh(user_q) if is_zh else small_talk_response(user_q)) or (
             "当前为离线聊天模式。你也可以在侧栏切换到“合同问答”。" if is_zh else
             "I'm in offline chat mode. Use the sidebar to switch features."
         )
         ts_ans = now_ts()
         st.session_state.offline_msgs.append({"role": "assistant", "content": ans, "ts": ts_ans})
-        with st.chat_message("assistant"):
-            st.caption(ts_ans)
-            st.markdown(ans)
+
+        # 同样：更新后立即刷新，只让“历史渲染”发生一次
+        st.rerun()
