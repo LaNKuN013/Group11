@@ -1,6 +1,13 @@
-# DSS5105 
+# DSS5105 Capstone Project - Track B: Conversational AI Assistant (Tenant Chatbot)
 
+Build a real estate AI system (chatbot). Cloud deployed, with API/UI.
 
+Industry Context: Real estate is heavily transaction- and relationship-driven. Landlords, agents, and tenants face information overload, manual back-and-forth communication, and fragmented systems. Generative AI can automate these workflows if applied to the right use cases.
+
+Goal: Build a chatbot for property inquiries and tenant services
+
+### Problem Statement
+Landlords and property managers spend significant time answering repetitive questions from tenants (rent due dates, maintenance responsibilities, contract clauses). Current solutions (WhatsApp/email/manual calls) are time-consuming and inconsistent.
 
 ---
 
