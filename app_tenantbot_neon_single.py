@@ -39,6 +39,7 @@ NUS_WHITE = "#f7f9fb"
 # Page meta / 页面元信息（标题、图标、布局）
 st.set_page_config(page_title="Tenant Chatbot", page_icon="🤖", layout="wide")
 
+
 if not st.session_state.get("css_injected", False):
     st.session_state["css_injected"] = True
     st.markdown("""<style> ……你的整段 Sidebar CSS…… </style>""", unsafe_allow_html=True)
@@ -989,6 +990,7 @@ if st.session_state.page == "chat":
         key="contract_input"
     )
 
+    # === 从这里开始替换 ===
     if has_chain and user_q:
         # 语言护栏（仅提示，不阻塞历史渲染）
         if guard_language_and_offer_switch(user_q):
@@ -1222,7 +1224,7 @@ elif st.session_state.page == "offline":
         render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Chat input always enabled here / 离线聊天始终可输入 
+    # Chat input always enabled here / 离线聊天始终可输入    
     user_q = st.chat_input(
         "打个招呼或问一些基础问题…" if is_zh else "Say hello or ask about some basic information…",
         key="offline_input"
