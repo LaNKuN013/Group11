@@ -1,13 +1,13 @@
-
+# DSS5105 
 
 
 
 ---
 
-## Tenant Chatbot Assistant
+## 🤖Tenant Chatbot Assistant
 
 ### Homepage
-<img width="1439" height="686" alt="Screenshot 2025-11-11 at 23 34 33" src="https://github.com/user-attachments/assets/fd64693d-8741-4417-981d-cc977f0cdec0" />
+<img width="1439" height="686" alt="homepage.png" src="https://github.com/LaNKuN013/group11/blob/main/READMEimages/homepage.png" />
 
 ### Chat Example
 <img width="1428" height="685" alt="chatexample.png" src="https://github.com/LaNKuN013/group11/blob/main/READMEimages/chatexample.png" />
