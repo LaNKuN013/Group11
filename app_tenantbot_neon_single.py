@@ -39,24 +39,18 @@ NUS_WHITE = "#f7f9fb"
 # Page meta / 页面元信息（标题、图标、布局）
 st.set_page_config(page_title="Tenant Chatbot", page_icon="🤖", layout="wide")
 
-
-if not st.session_state.get("css_injected", False):
-    st.session_state["css_injected"] = True
-    st.markdown("""<style> ……你的整段 Sidebar CSS…… </style>""", unsafe_allow_html=True)
-# --- Sidebar CSS overrides / 侧栏 CSS 定制 ---
-st.markdown(f"""
+# ========= A) CSS (inject-once) =========
+SIDEBAR_CSS = f"""
 <style>
 :root {{
   --nus-blue: {NUS_BLUE};
   --nus-orange: {NUS_ORANGE};
   --nus-white: {NUS_WHITE};
 }}
-
 /* Sidebar 背景 */
 [data-testid="stSidebar"] {{
   background-color: var(--nus-blue) !important;
 }}
-
 /* Sidebar 标题/说明默认橘色 */
 [data-testid="stSidebar"] h1,
 [data-testid="stSidebar"] h2,
@@ -68,19 +62,16 @@ st.markdown(f"""
   color: var(--nus-orange) !important;
   font-weight: 600;
 }}
-
 /* English / 中文 文本设为白色 */
 [data-testid="stSidebar"] div[role="radiogroup"] label p {{
   color: #fff !important;
   font-weight: 700 !important;
 }}
-
 /* Upload PDFs 提示文本设为白色 */
 [data-testid="stSidebar"] .stMarkdown p.keep-white,
 [data-testid="stSidebar"] .stMarkdown:last-child p {{
   color: #fff !important;
 }}
-
 /* ==== Sidebar Buttons ==== */
 [data-testid="stSidebar"] .stButton > button {{
   background-color: var(--nus-white) !important;
@@ -92,7 +83,6 @@ st.markdown(f"""
   color: black !important;
   fill: black !important;
 }}
-
 [data-testid="stSidebar"] .stButton > button:hover {{
   background-color: var(--nus-orange) !important;
   color: white !important;
@@ -102,7 +92,6 @@ st.markdown(f"""
   color: white !important;
   fill: white !important;
 }}
-
 /* ==== Expander：折叠前白色 / 展开后蓝色 ==== */
 [data-testid="stSidebar"] [data-testid="stExpander"] {{
   border-radius: 16px !important;
@@ -110,7 +99,6 @@ st.markdown(f"""
   margin-top: 10px !important;
   border: none !important;
 }}
-
 /* 未展开：白色 header + 橘色字 */
 [data-testid="stSidebar"] [data-testid="stExpander"] summary {{
    background-color: var(--nus-white) !important;
@@ -118,14 +106,12 @@ st.markdown(f"""
    padding: 12px !important;
    color: var(--nus-orange) !important;
    font-weight: 700 !important;
-   /* remove transitions to avoid flash on rerun */
    transition: none !important;
 }}
 [data-testid="stSidebar"] [data-testid="stExpander"] summary * {{
   color: var(--nus-orange) !important;
   fill: var(--nus-orange) !important;
 }}
-
 /* 展开后：蓝色 header + 白字 */
 [data-testid="stSidebar"] [data-testid="stExpander"][open] summary {{
    background-color: var(--nus-blue) !important;
@@ -136,7 +122,6 @@ st.markdown(f"""
   color: #fff !important;
   fill: #fff !important;
 }}
-
 /* 输入框取消橙色边框，改成淡灰色 */
 [data-testid="stSidebar"] input {{
   background-color: #ffffff !important;
@@ -145,7 +130,6 @@ st.markdown(f"""
   border: 1.5px solid #dcdcdc !important;
   font-weight: 600 !important;
 }}
-
 /* Diagnostics / API Setup 里的按钮保持白底黑字 */
 [data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button {{
   background-color: #fff !important;
@@ -153,107 +137,257 @@ st.markdown(f"""
   border-radius: 12px !important;
   font-weight: 700 !important;
 }}
-
 /* ===== 右侧主内容背景改为淡蓝 ===== */
 html, body,
 .stApp,
 [data-testid="stAppViewContainer"],
 [data-testid="stAppViewContainer"] > .main,
 [data-testid="stVerticalBlock"] .block-container {{
-  background-color: #F2F7FF !important;  /* 淡蓝 */
+  background-color: #F2F7FF !important;
 }}
-
-/* 顶部 header 也用淡蓝（如果你看到顶部一条白带） */
-[data-testid="stHeader"] {{
-  background: #F2F7FF !important;
-}}
-
+/* 顶部 header 也用淡蓝 */
+[data-testid="stHeader"] {{ background: #F2F7FF !important; }}
 </style>
-""", unsafe_allow_html=True)
+"""
 
-if not st.session_state.get("chat_css_injected", False):
-    st.session_state["chat_css_injected"] = True
-    st.markdown("""<style> ……你的聊天 CSS…… </style>""", unsafe_allow_html=True)
-# --- Chat message bubble CSS / 聊天消息气泡 CSS ---
-st.markdown("""
+CHAT_CSS = """
 <style>
-
-/* 让消息（头像 + 气泡）左右排列，并且垂直居中对齐 */
-.msg{
-  display:flex;
-  flex-direction:row;
-  align-items:center;        /* ✅ 头像和气泡垂直方向对齐（关键） */
-  gap:14px;
-  margin:18px 0;
-}
-
-/* 用户消息反向排列（头像在右）*/
-.msg[data-role="user"]{
-  flex-direction:row-reverse;
-}
-
-/* 头像固定大小，不被压缩 */
-.avatar{
-  width:64px; height:64px;
-  min-width:64px;
-  border-radius:50%;
-  overflow:hidden;
-  border:3px solid transparent;
-  display:flex; align-items:center; justify-content:center;
-}
-
-/* 边框颜色 */
-.msg[data-role="assistant"] .avatar{ border-color:#00205B; }
-.msg[data-role="user"]      .avatar{ border-color:#FF6F0F; }
-
-/* 头像图像填充圆形 */
-.avimg{
-  width:100%; height:100%;
-  object-fit:cover;
-  border-radius:50%;
-}
-
-/* ✅ 气泡区域在垂直方向上用 column，使 timestamp 跟气泡绑在一起 */
-.bubble-wrap{
-  display:flex;
-  flex-direction:column;
-  max-width:min(70vw, 900px);
-}
-
-/* 氣泡 */
-.bubble{
-  padding:14px 18px;
-  border-radius:20px;
-  font-size:1.08rem;
-  line-height:1.55;
-  box-shadow:0 5px 15px rgba(0,0,0,.12);
-  white-space:pre-wrap;
-}
-
-/* 配色 */
-.msg[data-role="assistant"] .bubble{
-  background:#00205B; color:#fff;
-}
-.msg[data-role="user"] .bubble{
-  background:#FF6F0F; color:#fff;
-}
-
-/* ✅ 时间戳必须跟随 bubble，而不是跟随 avatar */
-.meta{
-  font-size:12px; opacity:.6;
-  margin-top:6px;
-}
-
-/* ✅ 时间戳根据不同角色左右对齐 */
-.msg[data-role="assistant"] .meta{
-  align-self:flex-start;     /* 左边消息时间戳靠左 */
-}
-.msg[data-role="user"] .meta{
-  align-self:flex-end;       /* 右边消息时间戳靠右 */
-}
-
+.msg{display:flex;flex-direction:row;align-items:center;gap:14px;margin:18px 0;}
+.msg[data-role="user"]{flex-direction:row-reverse;}
+.avatar{width:64px;height:64px;min-width:64px;border-radius:50%;overflow:hidden;border:3px solid transparent;display:flex;align-items:center;justify-content:center;}
+.msg[data-role="assistant"] .avatar{border-color:#00205B;}
+.msg[data-role="user"] .avatar{border-color:#FF6F0F;}
+.avimg{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.bubble-wrap{display:flex;flex-direction:column;max-width:min(70vw, 900px);}
+.bubble{padding:14px 18px;border-radius:20px;font-size:1.08rem;line-height:1.55;box-shadow:0 5px 15px rgba(0,0,0,.12);white-space:pre-wrap;}
+.msg[data-role="assistant"] .bubble{background:#00205B;color:#fff;}
+.msg[data-role="user"] .bubble{background:#FF6F0F;color:#fff;}
+.meta{font-size:12px;opacity:.6;margin-top:6px;}
+.msg[data-role="assistant"] .meta{align-self:flex-start;}
+.msg[data-role="user"] .meta{align-self:flex-end;}
 </style>
-""", unsafe_allow_html=True)
+"""
+
+if not st.session_state.get("css_injected"):
+    st.session_state["css_injected"] = True
+    st.markdown(SIDEBAR_CSS, unsafe_allow_html=True)
+
+if not st.session_state.get("chat_css_injected"):
+    st.session_state["chat_css_injected"] = True
+    st.markdown(CHAT_CSS, unsafe_allow_html=True)
+
+
+# # --- Sidebar CSS overrides / 侧栏 CSS 定制 ---
+# st.markdown(f"""
+# <style>
+# :root {{
+#   --nus-blue: {NUS_BLUE};
+#   --nus-orange: {NUS_ORANGE};
+#   --nus-white: {NUS_WHITE};
+# }}
+
+# /* Sidebar 背景 */
+# [data-testid="stSidebar"] {{
+#   background-color: var(--nus-blue) !important;
+# }}
+
+# /* Sidebar 标题/说明默认橘色 */
+# [data-testid="stSidebar"] h1,
+# [data-testid="stSidebar"] h2,
+# [data-testid="stSidebar"] h3,
+# [data-testid="stSidebar"] h4,
+# [data-testid="stSidebar"] h5,
+# [data-testid="stSidebar"] h6,
+# [data-testid="stSidebar"] p:not(.keep-white) {{
+#   color: var(--nus-orange) !important;
+#   font-weight: 600;
+# }}
+
+# /* English / 中文 文本设为白色 */
+# [data-testid="stSidebar"] div[role="radiogroup"] label p {{
+#   color: #fff !important;
+#   font-weight: 700 !important;
+# }}
+
+# /* Upload PDFs 提示文本设为白色 */
+# [data-testid="stSidebar"] .stMarkdown p.keep-white,
+# [data-testid="stSidebar"] .stMarkdown:last-child p {{
+#   color: #fff !important;
+# }}
+
+# /* ==== Sidebar Buttons ==== */
+# [data-testid="stSidebar"] .stButton > button {{
+#   background-color: var(--nus-white) !important;
+#   color: black !important;
+#   border-radius: 12px !important;
+#   font-weight: 700 !important;
+# }}
+# [data-testid="stSidebar"] .stButton > button * {{
+#   color: black !important;
+#   fill: black !important;
+# }}
+
+# [data-testid="stSidebar"] .stButton > button:hover {{
+#   background-color: var(--nus-orange) !important;
+#   color: white !important;
+#   transition: none !important;
+# }}
+# [data-testid="stSidebar"] .stButton > button:hover * {{
+#   color: white !important;
+#   fill: white !important;
+# }}
+
+# /* ==== Expander：折叠前白色 / 展开后蓝色 ==== */
+# [data-testid="stSidebar"] [data-testid="stExpander"] {{
+#   border-radius: 16px !important;
+#   overflow: hidden !important;
+#   margin-top: 10px !important;
+#   border: none !important;
+# }}
+
+# /* 未展开：白色 header + 橘色字 */
+# [data-testid="stSidebar"] [data-testid="stExpander"] summary {{
+#    background-color: var(--nus-white) !important;
+#    border-radius: 16px !important;
+#    padding: 12px !important;
+#    color: var(--nus-orange) !important;
+#    font-weight: 700 !important;
+#    /* remove transitions to avoid flash on rerun */
+#    transition: none !important;
+# }}
+# [data-testid="stSidebar"] [data-testid="stExpander"] summary * {{
+#   color: var(--nus-orange) !important;
+#   fill: var(--nus-orange) !important;
+# }}
+
+# /* 展开后：蓝色 header + 白字 */
+# [data-testid="stSidebar"] [data-testid="stExpander"][open] summary {{
+#    background-color: var(--nus-blue) !important;
+#    color: #fff !important;
+#    transition: none !important;
+# }}
+# [data-testid="stSidebar"] [data-testid="stExpander"][open] summary * {{
+#   color: #fff !important;
+#   fill: #fff !important;
+# }}
+
+# /* 输入框取消橙色边框，改成淡灰色 */
+# [data-testid="stSidebar"] input {{
+#   background-color: #ffffff !important;
+#   color: var(--nus-blue) !important;
+#   border-radius: 10px !important;
+#   border: 1.5px solid #dcdcdc !important;
+#   font-weight: 600 !important;
+# }}
+
+# /* Diagnostics / API Setup 里的按钮保持白底黑字 */
+# [data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button {{
+#   background-color: #fff !important;
+#   color: #000 !important;
+#   border-radius: 12px !important;
+#   font-weight: 700 !important;
+# }}
+
+# /* ===== 右侧主内容背景改为淡蓝 ===== */
+# html, body,
+# .stApp,
+# [data-testid="stAppViewContainer"],
+# [data-testid="stAppViewContainer"] > .main,
+# [data-testid="stVerticalBlock"] .block-container {{
+#   background-color: #F2F7FF !important;  /* 淡蓝 */
+# }}
+
+# /* 顶部 header 也用淡蓝（如果你看到顶部一条白带） */
+# [data-testid="stHeader"] {{
+#   background: #F2F7FF !important;
+# }}
+
+# </style>
+# """, unsafe_allow_html=True)
+
+# if not st.session_state.get("chat_css_injected", False):
+#     st.session_state["chat_css_injected"] = True
+#     st.markdown("""<style> ……你的聊天 CSS…… </style>""", unsafe_allow_html=True)
+# # --- Chat message bubble CSS / 聊天消息气泡 CSS ---
+# st.markdown("""
+# <style>
+
+# /* 让消息（头像 + 气泡）左右排列，并且垂直居中对齐 */
+# .msg{
+#   display:flex;
+#   flex-direction:row;
+#   align-items:center;        /* ✅ 头像和气泡垂直方向对齐（关键） */
+#   gap:14px;
+#   margin:18px 0;
+# }
+
+# /* 用户消息反向排列（头像在右）*/
+# .msg[data-role="user"]{
+#   flex-direction:row-reverse;
+# }
+
+# /* 头像固定大小，不被压缩 */
+# .avatar{
+#   width:64px; height:64px;
+#   min-width:64px;
+#   border-radius:50%;
+#   overflow:hidden;
+#   border:3px solid transparent;
+#   display:flex; align-items:center; justify-content:center;
+# }
+
+# /* 边框颜色 */
+# .msg[data-role="assistant"] .avatar{ border-color:#00205B; }
+# .msg[data-role="user"]      .avatar{ border-color:#FF6F0F; }
+
+# /* 头像图像填充圆形 */
+# .avimg{
+#   width:100%; height:100%;
+#   object-fit:cover;
+#   border-radius:50%;
+# }
+
+# /* ✅ 气泡区域在垂直方向上用 column，使 timestamp 跟气泡绑在一起 */
+# .bubble-wrap{
+#   display:flex;
+#   flex-direction:column;
+#   max-width:min(70vw, 900px);
+# }
+
+# /* 氣泡 */
+# .bubble{
+#   padding:14px 18px;
+#   border-radius:20px;
+#   font-size:1.08rem;
+#   line-height:1.55;
+#   box-shadow:0 5px 15px rgba(0,0,0,.12);
+#   white-space:pre-wrap;
+# }
+
+# /* 配色 */
+# .msg[data-role="assistant"] .bubble{
+#   background:#00205B; color:#fff;
+# }
+# .msg[data-role="user"] .bubble{
+#   background:#FF6F0F; color:#fff;
+# }
+
+# /* ✅ 时间戳必须跟随 bubble，而不是跟随 avatar */
+# .meta{
+#   font-size:12px; opacity:.6;
+#   margin-top:6px;
+# }
+
+# /* ✅ 时间戳根据不同角色左右对齐 */
+# .msg[data-role="assistant"] .meta{
+#   align-self:flex-start;     /* 左边消息时间戳靠左 */
+# }
+# .msg[data-role="user"] .meta{
+#   align-self:flex-end;       /* 右边消息时间戳靠右 */
+# }
+
+# </style>
+# """, unsafe_allow_html=True)
 
 
 # Initialize session-scoped variables if missing / 首次访问时初始化会话变量
@@ -316,9 +450,36 @@ def lazy_import_psycopg():
         raise RuntimeError(f"psycopg2 not available: {e}")
 
 
+# def lazy_import_langchain():
+#     """Import LangChain stack lazily for RAG functions.
+#     RAG 相关依赖在真正需要时再导入，避免非RAG场景拖慢。"""
+#     try:
+#         from langchain_community.document_loaders import PyPDFLoader
+#         from langchain.text_splitter import RecursiveCharacterTextSplitter
+#         from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+#         from langchain_community.vectorstores import FAISS
+#         from langchain.chains import ConversationalRetrievalChain
+#         from langchain.memory import ConversationBufferMemory
+#         return {
+#             "PyPDFLoader": PyPDFLoader,
+#             "RecursiveCharacterTextSplitter": RecursiveCharacterTextSplitter,
+#             "OpenAIEmbeddings": OpenAIEmbeddings,
+#             "ChatOpenAI": ChatOpenAI,
+#             "FAISS": FAISS,
+#             "ConversationalRetrievalChain": ConversationalRetrievalChain,
+#             "ConversationBufferMemory": ConversationBufferMemory,
+#         }
+#     except Exception as e:
+#         # Surface actionable pip command / 明确提示安装命令
+#         raise RuntimeError(
+#             "LangChain stack missing. Install:\n"
+#             "pip install langchain langchain-openai openai pypdf faiss-cpu\n"
+#             f"Details: {e}"
+#         )
+
 def lazy_import_langchain():
-    """Import LangChain stack lazily for RAG functions.
-    RAG 相关依赖在真正需要时再导入，避免非RAG场景拖慢。"""
+    if "lc_stack" in st.session_state:
+        return st.session_state["lc_stack"]
     try:
         from langchain_community.document_loaders import PyPDFLoader
         from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -326,7 +487,7 @@ def lazy_import_langchain():
         from langchain_community.vectorstores import FAISS
         from langchain.chains import ConversationalRetrievalChain
         from langchain.memory import ConversationBufferMemory
-        return {
+        st.session_state["lc_stack"] = {
             "PyPDFLoader": PyPDFLoader,
             "RecursiveCharacterTextSplitter": RecursiveCharacterTextSplitter,
             "OpenAIEmbeddings": OpenAIEmbeddings,
@@ -335,11 +496,11 @@ def lazy_import_langchain():
             "ConversationalRetrievalChain": ConversationalRetrievalChain,
             "ConversationBufferMemory": ConversationBufferMemory,
         }
+        return st.session_state["lc_stack"]
     except Exception as e:
-        # Surface actionable pip command / 明确提示安装命令
         raise RuntimeError(
             "LangChain stack missing. Install:\n"
-            "pip install langchain langchain-openai openai pypdf faiss-cpu\n"
+            "  pip install langchain langchain-openai openai pypdf faiss-cpu\n"
             f"Details: {e}"
         )
 
@@ -755,21 +916,42 @@ def guard_language_and_offer_switch(user_text: str) -> bool:
 
     return False
 
-def local_image_base64(path: str) -> str | None:
+# def local_image_base64(path: str) -> str | None:
+#     try:
+#         if not os.path.isabs(path):
+#             # 相对脚本目录，避免“Downloads/Downloads/...”问题
+#             path = os.path.join(os.path.dirname(__file__), path)
+#         if not os.path.exists(path):
+#             return None
+#         with open(path, "rb") as f:
+#             return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+#     except Exception:
+#         return None
+
+# # 全局只读一次（放在 import 后）
+# ASSISTANT_AVATAR = local_image_base64("chatbot_image.png")  # 放在 .py 同级；或 images/chatbot.png
+# USER_AVATAR      = local_image_base64("an7tvcylywfb1.jpg")  # 可选用户头像
+
+def _b64_once(state_key: str, path: str) -> str | None:
+    if state_key in st.session_state:
+        return st.session_state[state_key]
     try:
-        if not os.path.isabs(path):
-            # 相对脚本目录，避免“Downloads/Downloads/...”问题
-            path = os.path.join(os.path.dirname(__file__), path)
-        if not os.path.exists(path):
+        abs_path = path
+        if not os.path.isabs(abs_path):
+            abs_path = os.path.join(os.path.dirname(__file__), path)
+        if not os.path.exists(abs_path):
+            st.session_state[state_key] = None
             return None
-        with open(path, "rb") as f:
-            return "data:image/png;base64," + base64.b64encode(f.read()).decode()
+        with open(abs_path, "rb") as f:
+            import base64
+            st.session_state[state_key] = "data:image/png;base64," + base64.b64encode(f.read()).decode()
+            return st.session_state[state_key]
     except Exception:
+        st.session_state[state_key] = None
         return None
 
-# 全局只读一次（放在 import 后）
-ASSISTANT_AVATAR = local_image_base64("chatbot_image.png")  # 放在 .py 同级；或 images/chatbot.png
-USER_AVATAR      = local_image_base64("an7tvcylywfb1.jpg")  # 可选用户头像
+ASSISTANT_AVATAR = _b64_once("avatar_assistant_b64", "chatbot_image.png")
+USER_AVATAR      = _b64_once("avatar_user_b64", "an7tvcylywfb1.jpg")
 
 def render_message(role, content, ts=None):
     avatar = (
