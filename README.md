@@ -140,7 +140,29 @@ PDF Upload → PyPDFLoader → Text Splitter → OpenAI Embeddings → FAISS Vec
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Local)
+1. Create venv & activate
+macOS/Linux
+```bush
+python3 -m venv .venv
+source .venv/bin/activate
+```
+Windows
+```bush
+py -3 -m venv .venv
+.\.venv\Scripts\activate
+```
+2. Install dependencies
+```bush
+pip install -r requirements.txt
+```
+3. Configure .env
+
+
+
+
+
+
 ```bush
 streamlit run app_tenantbot_neon_single.py
 ```
