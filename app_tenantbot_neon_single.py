@@ -904,7 +904,7 @@ with st.sidebar:
 apply_chat_input_visibility()
 
 
-# ========================= Pages / 页面（单文件切换） =========================
+# ========================= Pages / 页面（单文件切换）=========================
 # --- Contract Chat page / 合同问答 ---
 if st.session_state.page == "chat":
     # ===== 满分格式工具（只在本页面用） =====
@@ -961,58 +961,145 @@ if st.session_state.page == "chat":
 
         return sum([1 for k in keys if k in t])
     
-    # def _clause_priority(question: str) -> list:
+    # def _clause_priority(question: str):
+    #     """Define priority clauses / 设定条款优先顺序"""
     #     q = (question or "").lower()
-    #     # 针对常见问题给“条款优先队列”
     #     if "diplomatic" in q:
     #         return ["5(c)", "5(d)", "5(f)"]
-    #     if "repair" in q or "broken" in q or "spoiled" in q:
-    #         return ["2(i)", "2(g)", "2(j)", "2(e)", "2(f)", "2(k)", "4(c)"]
-    #     if "return" in q or "move out" in q or "handover" in q:
+    #     if "repair" in q:
+    #         return ["2(i)", "2(g)", "2(j)", "2(e)", "2(k)", "4(c)"]
+    #     if "return" in q or "handover" in q or "move out" in q:
     #         return ["2(y)", "2(z)", "6(o)"]
     #     return []
     
     def _clause_priority(question: str):
-        """Define priority clauses / 设定条款优先顺序"""
+        """
+        Smart clause-priority by intent scoring with a confidence threshold.
+        根据问题做“意图打分”，只有当意图足够明确时才返回优先条款；否则返回空列表，不干预默认排序。
+        这样避免对其他问题“显得傻”或过拟合。
+        """
         q = (question or "").lower()
-        if "diplomatic" in q:
-            return ["5(c)", "5(d)", "5(f)"]
-        if "repair" in q:
-            return ["2(i)", "2(g)", "2(j)", "2(e)", "2(k)", "4(c)"]
-        if "return" in q or "handover" in q or "move out" in q:
-            return ["2(y)", "2(z)", "6(o)"]
-        return []
+
+        # --- 关键词桶（支持同义词/变体）—
+        buckets = {
+            "diplomatic": {
+                "keywords": [
+                    "diplomatic", "terminate", "termination", "relocat", "transfer",
+                    "deport", "refused permission", "work pass", "reside", "notice", "2 months"
+                ],
+                "clauses": ["5(c)", "5(d)", "5(f)"]
+            },
+            "repairs": {
+                "keywords": [
+                    "repair", "repairs", "broken", "spoiled", "maintenance",
+                    "s$200", "bulb", "tube", "aircon", "air con", "water heater",
+                    "structural", "wear and tear", "approval", "landlord approval"
+                ],
+                "clauses": ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
+            },
+            "moveout": {
+                "keywords": [
+                    "return", "move out", "handover", "hand over", "deliver up",
+                    "clean", "dry clean", "curtain", "remove nails", "white putty",
+                    "joint inspection", "keys", "furniture", "no rent"
+                ],
+                "clauses": ["2(y)", "2(z)", "6(o)"]
+            },
+            # 可按需加更多主题（押金、转租、宠物、访客、迟付租金等）
+            "deposit": {
+                "keywords": ["deposit", "security deposit", "forfeit", "deduct", "deduction"],
+                "clauses": []  # 先空着，等你标注具体条款再填
+            },
+            "pets": {
+                "keywords": ["pet", "pets", "animal"],
+                "clauses": []
+            }
+        }
+
+        # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
+        def score_bucket(words, text):
+            return sum(1 for w in words if w in text)
+
+        scores = {k: score_bucket(v["keywords"], q) for k, v in buckets.items()}
+        # 取最高分的意图
+        best_topic = max(scores, key=scores.get) if scores else None
+        best_score = scores.get(best_topic, 0)
+
+        # --- 置信门槛（避免“弱匹配”触发优先条款）---
+        # 经验值：≥2 基本能判断出明确意图；否则交给默认相关性排序即可。
+        CONFIDENCE_THRESHOLD = 2
+        if best_score >= CONFIDENCE_THRESHOLD:
+            return buckets[best_topic]["clauses"]
+        return []  # 不启用优先条款 → 不会“傻”
     
-    def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = "") -> List[Dict[str, str]]:
-        """Pick most relevant excerpts / 从检索结果中选择最相关的条款内容"""
-        prio = _clause_priority(question)
-        ranked = []
-        seen = set()
+    # def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = "") -> List[Dict[str, str]]:
+    #     """Pick most relevant excerpts / 从检索结果中选择最相关的条款内容"""
+    #     prio = _clause_priority(question)
+    #     ranked = []
+    #     seen = set()
+
+    #     for d in docs or []:
+    #         meta = getattr(d, "metadata", {})
+    #         content = getattr(d, "page_content", "").strip()
+    #         page = meta.get("page")
+
+    #         if not content:
+    #             continue
+
+    #         snippet = content[:400].replace("\n", " ")
+    #         clause = _extract_clause_id(content)
+    #         score = _keyword_score(question, snippet)
+
+    #         if clause.lower().replace("clause ", "") in [c.lower() for c in prio]:
+    #             score += 5  # boost relevance / 优先条款加权
+
+    #         key = (page, clause, snippet[:40])
+    #         if key in seen:
+    #             continue
+    #         seen.add(key)
+
+    #         ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
+
+    #     ranked.sort(key=lambda x: x[0], reverse=True)
+    #     return [item for _, item in ranked[:max_items]]
+    
+    def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
+        """
+        Re-rank excerpts by (keyword relevance + soft clause priority).
+        用“关键词相关性 + 软优先条款加权”做重排。优先条款只+权重，不保证一定进前N；
+        这样在非目标问题上不至于“强行引用”错误条款。
+        """
+        prio = _clause_priority(question)  # 可能为空 → 不干预
+        ranked, seen = [], set()
 
         for d in docs or []:
-            meta = getattr(d, "metadata", {})
-            content = getattr(d, "page_content", "").strip()
+            meta = getattr(d, "metadata", {}) or {}
             page = meta.get("page")
-
+            content = (getattr(d, "page_content", "") or "").strip()
             if not content:
                 continue
 
             snippet = content[:400].replace("\n", " ")
             clause = _extract_clause_id(content)
+
+            # 关键词相关性分
             score = _keyword_score(question, snippet)
 
-            if clause.lower().replace("clause ", "") in [c.lower() for c in prio]:
-                score += 5  # boost relevance / 优先条款加权
+            # 软优先：命中优先条款则 +5（而不是 +999 或强制塞入）
+            if prio and clause and clause.lower().replace("clause ", "") in [p.lower() for p in prio]:
+                score += 5
 
-            key = (page, clause, snippet[:40])
+            key = (page, clause, snippet[:60])
             if key in seen:
                 continue
             seen.add(key)
-
             ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
 
+        # 排序取前N
         ranked.sort(key=lambda x: x[0], reverse=True)
-        return [item for _, item in ranked[:max_items]]
+        topn = [item for _, item in ranked[:max_items]]
+        return topn
+
         
     def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
             """Format final output / 包装最终输出格式"""
@@ -1024,9 +1111,9 @@ if st.session_state.page == "chat":
             ref_text = "\n".join(refs_lines) if refs_lines else "Not available."
 
             return f"""{llm_answer.strip()}
-            🔎 Relevant Contract Excerpts:
-            {ref_text}
-            """
+                    🔎 Relevant Contract Excerpts:
+                    {ref_text}
+                    """
 
     # ===== 页面 UI =====
     is_zh = st.session_state.lang == "zh"
@@ -1084,13 +1171,7 @@ if st.session_state.page == "chat":
                     ChatOpenAI = lc["ChatOpenAI"]
                     RetrievalQA = lc["RetrievalQA"]
 
-                    # retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.3})
                     retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 8})
-
-                    # retriever = st.session_state.vectorstore.as_retriever(
-                    #     search_type="mmr",
-                    #     search_kwargs={"k": 8, "lambda_mult": 0.3}
-                    # )
                     llm = ChatOpenAI(temperature=0)
 
                     prompt = PromptTemplate(
