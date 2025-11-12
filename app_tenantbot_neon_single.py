@@ -912,37 +912,62 @@ if st.session_state.page == "chat":
     import re
     from typing import List, Dict, Any
 
+    # FULL_SCORE_SYSTEM_PROMPT = """
+    # You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
+    # ALWAYS answer in this exact structure and bullet labels. When the retrieved context contains any money or time limits,
+    # you MUST repeat those numbers verbatim in the Answer and in the Breakdown (do not round, paraphrase, or omit).
+
+    # ✅ Answer:
+    # <short, direct, actionable answer in 1–3 sentences with exact numbers>
+
+    # 💡 Breakdown:
+    # • Preconditions / timing:
+    # • Exact limits (numbers / notice period / who pays):
+    # • Required documents / approvals:
+    # • Exceptions (when this rule does NOT apply):
+    # • Operational steps (if applicable):
+
+    # 🟢 Good to know (optional):
+    # <benefit to the tenant, if the retrieved text states it>
+
+    # 🔴 Warning (optional):
+    # <penalty, reimbursement, forfeiture, or risk stated in the retrieved text>
+
+    # 🔎 Relevant Contract Excerpts (verbatim):
+    # "<verbatim quote 1>" (Clause <id>, page <n>)
+    # "<verbatim quote 2>" (Clause <id>, page <n>)
+
+    # Rules:
+    # - ONLY answer based on retrieved PDF excerpts. If not found, say: "Not mentioned in the contract."
+    # - NEVER invent clause numbers or page numbers; include them only if visible in the excerpt.
+    # - ALWAYS keep numbers EXACT (e.g., S$200, 14 days, 7 days, 2 months).
+    # - IGNORE disclaimer/boilerplate or anonymization notes (e.g., 'Disclaimer', 'placeholders or fictional information').
+    # """
+    
+    
     FULL_SCORE_SYSTEM_PROMPT = """
-    You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
-    ALWAYS answer in this exact structure and bullet labels. When the retrieved context contains any money or time limits,
-    you MUST repeat those numbers verbatim in the Answer and in the Breakdown (do not round, paraphrase, or omit).
+You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
+ALWAYS answer in this structure:
 
-    ✅ Answer:
-    <short, direct, actionable answer in 1–3 sentences with exact numbers>
+✅ Answer:
+<short, direct, actionable answer in 1–3 sentences>
 
-    💡 Breakdown:
-    • Preconditions / timing:
-    • Exact limits (numbers / notice period / who pays):
-    • Required documents / approvals:
-    • Exceptions (when this rule does NOT apply):
-    • Operational steps (if applicable):
+💡 Breakdown (must cover all that apply):
+• Preconditions / timing (e.g., "after first 12 months")
+• Exact limits / who pays / notice period (e.g., "2 months’ notice / 2 months’ rent in lieu")
+• Required documents / approvals (e.g., "documentary proof", "landlord approval if > S$200")
+• Important exceptions (e.g., "no diplomatic clause during renewal term")
+• Operational steps (e.g., "joint inspection, return keys")
 
-    🟢 Good to know (optional):
-    <benefit to the tenant, if the retrieved text states it>
+🔎 Relevant Contract Excerpts:
+"<verbatim quote 1>" (Clause <id>, page <n>)
+"<verbatim quote 2>" (Clause <id>, page <n>)
 
-    🔴 Warning (optional):
-    <penalty, reimbursement, forfeiture, or risk stated in the retrieved text>
-
-    🔎 Relevant Contract Excerpts (verbatim):
-    "<verbatim quote 1>" (Clause <id>, page <n>)
-    "<verbatim quote 2>" (Clause <id>, page <n>)
-
-    Rules:
-    - ONLY answer based on retrieved PDF excerpts. If not found, say: "Not mentioned in the contract."
-    - NEVER invent clause numbers or page numbers; include them only if visible in the excerpt.
-    - ALWAYS keep numbers EXACT (e.g., S$200, 14 days, 7 days, 2 months).
-    - IGNORE disclaimer/boilerplate or anonymization notes (e.g., 'Disclaimer', 'placeholders or fictional information').
-    """
+Rules:
+- Use ONLY information from retrieved context; If not found, say: "Not mentioned in the contract."
+- Keep key numbers EXACT (S$200, 14 days, 7 days, 2 months).
+- Do NOT invent clause number / page number; only include if visible.
+"""
     
     # ========= 条款匹配与精准引用 ========= #
 
@@ -1065,26 +1090,6 @@ if st.session_state.page == "chat":
         # 排序取前N
         ranked.sort(key=lambda x: x[0], reverse=True)
         topn = [item for _, item in ranked[:max_items]]
-
-        # 可选：如果明确有优先条款但没进前N，且你“必须覆盖”，可以尝试温和补充（不推荐默认开启）
-        # 例如在 prio 非空且 topn 中没有任何 prio 子集时，适度回查向量库补 1 条
-        # ——为了稳妥，这里给出注释模板，你可以按需要开启：
-        #
-        # if prio and not any((e.get("clause") or "").lower().replace("clause ", "") in [p.lower() for p in prio] for e in topn):
-        #     if "vectorstore" in st.session_state:
-        #         try:
-        #             retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 6})
-        #             # 用条款号或关键词做一次回查
-        #             probe = " OR ".join(prio)
-        #             extra_docs = retr.get_relevant_documents(probe)
-        #             for ed in extra_docs:
-        #                 snip = (ed.page_content or "")[:400].replace("\n", " ")
-        #                 cl = _extract_clause_id(ed.page_content or "")
-        #                 if cl and cl.lower().replace("clause ", "") in [p.lower() for p in prio]:
-        #                     topn.append({"quote": snip, "page": ed.metadata.get("page"), "clause": cl})
-        #                     break
-        #         except Exception:
-        #             pass
         #
         return topn
     
