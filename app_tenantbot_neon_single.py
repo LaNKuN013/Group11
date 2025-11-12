@@ -914,8 +914,7 @@ if st.session_state.page == "chat":
 
     FULL_SCORE_SYSTEM_PROMPT = """
     You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
-    ALWAYS answer in this exact structure and bullet labels. When the retrieved context contains any money or time limits,
-    you MUST repeat those numbers verbatim in the Answer and in the Breakdown (do not round, paraphrase, or omit).
+    ALWAYS answer in this exact structure and bullet labels.
 
     ✅ Answer:
     <short, direct, actionable answer in 1–3 sentences with exact numbers>
@@ -928,20 +927,22 @@ if st.session_state.page == "chat":
     • Operational steps (if applicable):
 
     🟢 Good to know (optional):
-    <benefit to the tenant, if the retrieved text states it>
+    <benefit to the tenant, if the contract states it>
 
     🔴 Warning (optional):
-    <penalty, reimbursement, forfeiture, or risk stated in the retrieved text>
+    <penalty, reimbursement, forfeiture, or risk stated in the contract>
 
     🔎 Relevant Contract Excerpts (verbatim):
     "<verbatim quote 1>" (Clause <id>, page <n>)
     "<verbatim quote 2>" (Clause <id>, page <n>)
 
     Rules:
-    - ONLY answer based on retrieved PDF excerpts. If not found, say: "Not mentioned in the contract."
+    - When the retrieved context contains ANY money amount or time limit (e.g., S$200, 14 days, 7 days, 2 months),
+    you MUST repeat those numbers **verbatim** in both ✅ Answer and 💡 Breakdown.
+    - NEVER paraphrase, remove, round, or reinterpret numbers.
+    - ONLY answer based on retrieved PDF excerpts. If unclear or not found, say: "Not mentioned in the contract."
     - NEVER invent clause numbers or page numbers; include them only if visible in the excerpt.
-    - ALWAYS keep numbers EXACT (e.g., S$200, 14 days, 7 days, 2 months).
-    - IGNORE disclaimer/boilerplate or anonymization notes (e.g., 'Disclaimer', 'placeholders or fictional information').
+    - IGNORE disclaimers/boilerplate text (e.g., “Disclaimer”, “placeholders or fictional information”).
     """
     
     # ========= 条款匹配与精准引用 ========= #
@@ -952,74 +953,98 @@ if st.session_state.page == "chat":
         m = _CLAUSE_RE.search(text or "")
         return m.group(1) if m else ""
     
-    def _keyword_score(question: str, text: str) -> int: 
-        """Score relevance by keyword matching / 根据问题匹配关键词打分""" 
-        q = (question or "").lower() 
-        t = (text or "").lower() 
-        
-        keys = [] # Diplomacy clause 
-        if "diplomatic" in q or "relocat" in q or "terminate" in q: 
-            keys += ["diplomatic", "terminate", "2 months", "commission"] # Repairs 
-        if "repair" in q or "broken" in q or "spoil" in q: 
-            keys += ["s$200", "bulb", "tube", "air", "approval", "fair wear"] # Return unit 
-        if "return" in q or "handover" in q or "move out" in q: 
-            keys += ["clean", "dry clean", "curtain", "joint inspection", "keys"] 
-            
-            return sum([1 for k in keys if k in t])
+    # --- 1) 关键词打分：确保始终返回 int ---
+    def _keyword_score(question: str, text: str) -> int:
+        """Score relevance by keyword matching / 根据问题匹配关键词打分"""
+        q = (question or "").lower()
+        t = (text or "").lower()
 
-    def _clause_priority(question: str): 
-        """Return clause priority list based on question intent""" 
-        q = (question or "").lower() 
-        
-        if "diplomatic" in q: 
-            return ["5(c)", "5(d)", "5(f)"] # 必须都出现 
-        if "repair" in q or "broken" in q or "spoil" in q: 
-            return ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"] # 全部覆盖老师示例 
-        if "return" in q or "handover" in q or "move" in q: 
-            return ["2(y)", "2(z)", "6(o)"] # 包含 no rent during repair period return []
+        keys = []
+        # Diplomatic clause
+        if ("diplomatic" in q) or ("relocat" in q) or ("terminate" in q) or ("termination" in q):
+            keys += ["diplomatic", "terminate", "2 months", "commission", "relocat", "deport", "refused"]
+
+        # Repairs
+        if ("repair" in q) or ("repairs" in q) or ("broken" in q) or ("spoil" in q) or ("spoiled" in q) or ("maintenance" in q):
+            keys += ["s$200", "200", "minor repair", "bulb", "tube", "aircon", "air con", "water heater",
+                    "structural", "fair wear", "approval", "landlord approval"]
+
+        # Move-out / handover
+        if ("return" in q) or ("handover" in q) or ("hand over" in q) or ("move out" in q) or ("deliver up" in q):
+            keys += ["clean", "dry clean", "curtain", "remove nails", "white putty", "joint inspection", "keys", "no rent"]
+
+        # 👍 始终返回整数
+        return sum(1 for k in keys if k in t)
+
+
+    # --- 2) 条款优先级：补齐默认返回 ---
+    def _clause_priority(question: str):
+        """Return clause priority list based on question intent"""
+        q = (question or "").lower()
+
+        if "diplomatic" in q or "relocat" in q or "terminate" in q or "termination" in q:
+            return ["5(c)", "5(d)", "5(f)"]
+
+        if ("repair" in q) or ("repairs" in q) or ("broken" in q) or ("spoil" in q) or ("spoiled" in q) or ("maintenance" in q):
+            return ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
+
+        if ("return" in q) or ("handover" in q) or ("hand over" in q) or ("move" in q) or ("move out" in q) or ("deliver up" in q):
+            return ["2(y)", "2(z)", "6(o)"]
+
+        return []  # ← 别漏了这个
+
     
     
+    # --- 3) 证据重排：保证分数为 int；规范化条款号匹配 ---
     def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
         """Pick most relevant clauses + force include priority ones"""
-
         priority = _clause_priority(question)
-        ranked, seen = [], set()
+        prio_norm = [p.lower().replace("clause", "").strip() for p in priority]
 
-        # 从 Retrieval QA 的 source_docs 里筛选
+        ranked = []
+        seen = set()
+
         for d in docs or []:
-            content = getattr(d, "page_content", "").strip()
-            meta = getattr(d, "metadata", {})
+            content = (getattr(d, "page_content", "") or "").strip()
+            meta = getattr(d, "metadata", {}) or {}
             page = meta.get("page")
 
             if not content:
                 continue
 
             snippet = content[:400].replace("\n", " ")
-            clause = _extract_clause_id(content)
-            score = _keyword_score(question, snippet)
+            clause_raw = _extract_clause_id(content)  # e.g. "Clause 5(c)"
+            clause_norm = (clause_raw or "").lower().replace("clause", "").strip()  # e.g. "5(c)"
 
-            # ⭐ 强制优先条款加权，使其一定排在前面
-            if clause and any(clause.lower().startswith(p.lower().replace("clause ","")) for p in priority):
+            # 永远是整数
+            score = int(_keyword_score(question, snippet))
+
+            # 命中优先条款 → 加权
+            if clause_norm and (clause_norm in prio_norm):
                 score += 10
 
-            ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
+            key = (page, clause_raw, snippet[:60])
+            if key in seen:
+                continue
+            seen.add(key)
 
-        # ⭐ 如果 priority clause 没出现 → 直接向 vectorstore 重新查找补齐
-        if ranked:
-            found_clauses = {item[1]['clause'] for item in ranked}
-            missing = [cl for cl in priority if cl not in found_clauses]
+            ranked.append((score, {"quote": snippet, "page": page, "clause": clause_raw}))
 
-            if missing and "vectorstore" in st.session_state:
-                retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 10})
-                for clause in missing:
-                    extra = retr.get_relevant_documents(clause)
-                    for d in extra:
-                        snippet = d.page_content[:400].replace("\n", " ")
-                        ranked.append((999, {
-                            "quote": snippet,
-                            "page": d.metadata.get("page"),
-                            "clause": clause
-                        }))
+        # 如需从向量库补缺失的优先条款（可选）
+        if ranked and priority and "vectorstore" in st.session_state:
+            found_norm = { (e[1]["clause"] or "").lower().replace("clause", "").strip() for e in ranked if e[1].get("clause") }
+            missing = [p for p in prio_norm if p not in found_norm]
+            if missing:
+                try:
+                    retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 10})
+                    for clause in missing:
+                        extra = retr.get_relevant_documents(clause)
+                        for ed in extra:
+                            snip = (ed.page_content or "")[:400].replace("\n", " ")
+                            ranked.append((999, {"quote": snip, "page": ed.metadata.get("page"), "clause": f"Clause {clause}"}))
+                            break
+                except Exception:
+                    pass
 
         ranked.sort(key=lambda x: x[0], reverse=True)
         return [item for _, item in ranked[:max_items]]
@@ -1124,7 +1149,11 @@ if st.session_state.page == "chat":
                     ChatOpenAI = lc["ChatOpenAI"]
                     RetrievalQA = lc["RetrievalQA"]
 
-                    retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.3})
+                    # retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.3})
+                    retriever = vs.as_retriever(
+                        search_type="mmr",
+                        search_kwargs={"k": 8, "fetch_k": 40, "lambda_mult": 0.3}
+                    )
                     llm = ChatOpenAI(temperature=0)
 
                     prompt = PromptTemplate(
@@ -1257,54 +1286,6 @@ if st.session_state.page == "chat":
                 final_md = "（API Key 无效）" if is_zh else "Invalid API key."
             else:
                 final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
-
-        # # 3) 调用链
-        # try:
-        #     smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
-        #     if smalltalk is not None:
-        #         # 小聊优先
-        #         final_md = smalltalk
-        #         source_docs = []
-        #     else:
-        #         # 用“系统护栏 + 用户问题”的拼接，尽量引导满分格式
-        #         system_hint = (
-        #             "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
-        #             if is_zh else
-        #             "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
-        #         )
-        #         query = f"{system_hint}\nQuestion: {user_q}"
-        #         with st.spinner("正在回答…" if is_zh else "Answering…"):
-        #             try:
-        #                 resp = st.session_state.chain.invoke({"query": query})
-        #             except Exception:
-        #                 resp = st.session_state.chain({"query": query})
-
-        #         # 提取答案 + 证据
-        #         if isinstance(resp, dict):
-        #             final_text = resp.get("result") or resp.get("answer") or ""
-        #             source_docs = resp.get("source_documents") or []
-        #         else:
-        #             final_text, source_docs = str(resp), []
-
-        #         # 若链没返回文档，退而用向量库检索补证据
-        #         if not source_docs and st.session_state.get("vectorstore") is not None:
-        #             try:
-        #                 retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3})
-        #                 source_docs = retr.get_relevant_documents(user_q)
-        #             except Exception:
-        #                 source_docs = []
-
-        #         # 包装为“满分格式”
-        #         final_md = format_contract_answer(user_q, final_text, source_docs)
-
-        # except Exception as e:
-        #     msg = str(e)
-        #     if "insufficient_quota" in msg or "429" in msg:
-        #         final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
-        #     elif "401" in msg or "invalid_api_key" in msg.lower():
-        #         final_md = "（API Key 无效）" if is_zh else "Invalid API key."
-        #     else:
-        #         final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
 
         # 4) 输出 + 入历史
         ts_ans = now_ts()
