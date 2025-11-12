@@ -274,6 +274,14 @@ if "kb_doc_names" not in st.session_state:
 
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
+    
+    
+# ✅ 必须在 app 顶部初始化 session_state（避免 Bad message format）
+if "page" not in st.session_state:
+    st.session_state.page = "chat"
+
+
+
 
 
 
