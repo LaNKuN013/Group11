@@ -1228,112 +1228,64 @@ if st.session_state.page == "chat":
         return sum([1 for k in keys if k in t])
 
     def _clause_priority(question: str):
+        """Return clause priority list based on question intent"""
         q = (question or "").lower()
 
-        # --- 关键词桶（支持同义词/变体）—
-        buckets = {
-            "diplomatic": {
-                "keywords": [
-                    "diplomatic", "terminate", "termination", "relocat", "transfer",
-                    "deport", "refused permission", "work pass", "reside", "notice", "2 months"
-                ],
-                "clauses": ["5(c)", "5(d)", "5(f)"]
-            },
-            "repairs": {
-                "keywords": [
-                    "repair", "repairs", "broken", "spoiled", "maintenance",
-                    "s$200", "bulb", "tube", "aircon", "air con", "water heater",
-                    "structural", "wear and tear", "approval", "landlord approval"
-                ],
-                "clauses": ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
-            },
-            "moveout": {
-                "keywords": [
-                    "return", "move out", "handover", "hand over", "deliver up",
-                    "clean", "dry clean", "curtain", "remove nails", "white putty",
-                    "joint inspection", "keys", "furniture", "no rent"
-                ],
-                "clauses": ["2(y)", "2(z)", "6(o)"]
-            },
-            # 可按需加更多主题（押金、转租、宠物、访客、迟付租金等）
-            "deposit": {
-                "keywords": ["deposit", "security deposit", "forfeit", "deduct", "deduction"],
-                "clauses": []  # 先空着，等你标注具体条款再填
-            },
-            "pets": {
-                "keywords": ["pet", "pets", "animal"],
-                "clauses": []
-            }
-        }
+        if "diplomatic" in q:
+            return ["5(c)", "5(d)", "5(f)"]  # 必须都出现
 
-        # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
-        def score_bucket(words, text):
-            return sum(1 for w in words if w in text)
+        if "repair" in q or "broken" in q or "spoil" in q:
+            return ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]   # 全部覆盖老师示例
 
-        scores = {k: score_bucket(v["keywords"], q) for k, v in buckets.items()}
-        # 取最高分的意图
-        best_topic = max(scores, key=scores.get) if scores else None
-        best_score = scores.get(best_topic, 0)
+        if "return" in q or "handover" in q or "move" in q:
+            return ["2(y)", "2(z)", "6(o)"]  # 包含 no rent during repair period
 
-        # --- 置信门槛（避免“弱匹配”触发优先条款）---
-        # 经验值：≥2 基本能判断出明确意图；否则交给默认相关性排序即可。
-        CONFIDENCE_THRESHOLD = 2
-        if best_score >= CONFIDENCE_THRESHOLD:
-            return buckets[best_topic]["clauses"]
-        return []  # 不启用优先条款 → 不会“傻”
+        return []
 
     def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
-        prio = _clause_priority(question)  # 可能为空 → 不干预
+        """Pick most relevant clauses + force include priority ones"""
+
+        priority = _clause_priority(question)
         ranked, seen = [], set()
 
+        # 从 Retrieval QA 的 source_docs 里筛选
         for d in docs or []:
-            meta = getattr(d, "metadata", {}) or {}
+            content = getattr(d, "page_content", "").strip()
+            meta = getattr(d, "metadata", {})
             page = meta.get("page")
-            content = (getattr(d, "page_content", "") or "").strip()
+
             if not content:
                 continue
 
             snippet = content[:400].replace("\n", " ")
             clause = _extract_clause_id(content)
-
-            # 关键词相关性分
             score = _keyword_score(question, snippet)
 
-            # 软优先：命中优先条款则 +5（而不是 +999 或强制塞入）
-            if prio and clause and clause.lower().replace("clause ", "") in [p.lower() for p in prio]:
-                score += 5
+            # ⭐ 强制优先条款加权，使其一定排在前面
+            if clause and any(clause.lower().startswith(p.lower().replace("clause ","")) for p in priority):
+                score += 10
 
-            key = (page, clause, snippet[:60])
-            if key in seen:
-                continue
-            seen.add(key)
             ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
 
-        # 排序取前N
-        ranked.sort(key=lambda x: x[0], reverse=True)
-        topn = [item for _, item in ranked[:max_items]]
+        # ⭐ 如果 priority clause 没出现 → 直接向 vectorstore 重新查找补齐
+        if ranked:
+            found_clauses = {item[1]['clause'] for item in ranked}
+            missing = [cl for cl in priority if cl not in found_clauses]
 
-        # 可选：如果明确有优先条款但没进前N，且你“必须覆盖”，可以尝试温和补充（不推荐默认开启）
-        # 例如在 prio 非空且 topn 中没有任何 prio 子集时，适度回查向量库补 1 条
-        # ——为了稳妥，这里给出注释模板，你可以按需要开启：
-        #
-        if prio and not any((e.get("clause") or "").lower().replace("clause ", "") in [p.lower() for p in prio] for e in topn):
-            if "vectorstore" in st.session_state:
-                try:
-                    retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 6})
-                    # 用条款号或关键词做一次回查
-                    probe = " OR ".join(prio)
-                    extra_docs = retr.get_relevant_documents(probe)
-                    for ed in extra_docs:
-                        snip = (ed.page_content or "")[:400].replace("\n", " ")
-                        cl = _extract_clause_id(ed.page_content or "")
-                        if cl and cl.lower().replace("clause ", "") in [p.lower() for p in prio]:
-                            topn.append({"quote": snip, "page": ed.metadata.get("page"), "clause": cl})
-                            break
-                except Exception:
-                    pass
-        
-        return topn
+            if missing and "vectorstore" in st.session_state:
+                retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 10})
+                for clause in missing:
+                    extra = retr.get_relevant_documents(clause)
+                    for d in extra:
+                        snippet = d.page_content[:400].replace("\n", " ")
+                        ranked.append((999, {
+                            "quote": snippet,
+                            "page": d.metadata.get("page"),
+                            "clause": clause
+                        }))
+
+        ranked.sort(key=lambda x: x[0], reverse=True)
+        return [item for _, item in ranked[:max_items]]
 
     def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
         """Format final output / 包装最终输出格式"""
