@@ -17,6 +17,7 @@ Purpose / 作用：
 # =============================== Imports / 导入 ===============================
 import os  # env vars, keys / 读取环境变量与密钥
 import re  # simple text normalization / 文本正则处理
+from typing import List, Dict, Any  # type hints / 类型提示
 import base64  # encoding avatars / 头像编码
 import tempfile  # cache uploaded PDFs / 缓存上传PDF的临时文件
 from datetime import datetime  # timestamps / 时间戳
@@ -24,11 +25,14 @@ from zoneinfo import ZoneInfo  # local timezone SGT / 新加坡时区处理
 import warnings  # suppress specific warnings / 抑制特定警告
 import streamlit as st  # Streamlit UI framework / Streamlit 界面框架
 
+    
+
 # Silence LangChain noisy warnings in logs / 屏蔽 LangChain 的噪声警告
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
 
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
+_CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
 
 # --- 主题常量（NUS 配色） ---
 NUS_BLUE = "#00205B"
@@ -247,6 +251,32 @@ st.markdown("""
 
 </style>
 """, unsafe_allow_html=True)
+
+# ================== Full‑score prompt template / 满分格式 Prompt 模板 ==================
+FULL_SCORE_SYSTEM_PROMPT = """
+    You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
+    ALWAYS answer in this structure:
+
+    ✅ Answer:
+    <short, direct, actionable answer in 1–3 sentences>
+
+    💡 Breakdown (must cover all that apply):
+    • Preconditions / timing (e.g., "after first 12 months")
+    • Exact limits / who pays / notice period (e.g., "2 months’ notice or 2 months’ rent")
+    • Required documents / approvals (e.g., "documentary proof", "landlord approval if > S$200")
+    • Important exceptions (e.g., "no diplomatic clause during renewal")
+    • Operational steps (e.g., "joint inspection, handover keys")
+
+    🔎 Relevant Contract Excerpts:
+    "<verbatim quote 1>" (Clause <id>, page <n>)
+    "<verbatim quote 2>" (Clause <id>, page <n>)
+
+    Rules:
+    - Quote ONLY what’s in retrieved context. If not found, say: "Not mentioned in the contract. Please check with the landlord/agent."
+    - Keep numbers EXACT (S$200, 14 days, 7 days, 2 months).
+    - Never invent clause IDs/pages. If no clause ID is visible, include page only.
+    - Be concise and readable.
+    """
 
 
 # Initialize session-scoped variables if missing / 首次访问时初始化会话变量
@@ -777,6 +807,7 @@ def _b64_once(state_key: str, path: str) -> str | None:
 ASSISTANT_AVATAR = _b64_once("avatar_assistant_b64", "chatbot_image.png")
 USER_AVATAR      = _b64_once("avatar_user_b64", "user_image.jpg")
 
+# ---- Chat message rendering / 聊天消息渲染 ----
 def render_message(role, content, ts=None):
     avatar = (
         f"<img src='{ASSISTANT_AVATAR}' class='avimg' />"
@@ -797,6 +828,138 @@ def render_message(role, content, ts=None):
         """,
         unsafe_allow_html=True,
     )
+
+# ---- RAG excerpt ranking helpers / RAG 摘录排序辅助 ----
+def _extract_clause_id(text: str) -> str:
+        """Extract clause number if exists / 若包含条款编号则提取"""
+        m = _CLAUSE_RE.search(text or "")
+        return m.group(1) if m else ""
+    
+def _keyword_score(question: str, text: str) -> int:
+    """Score relevance by keyword matching / 根据问题匹配关键词打分"""
+    q = (question or "").lower()
+    t = (text or "").lower()
+
+    keys = []
+    # Diplomacy clause
+    if "diplomatic" in q or "relocat" in q or "terminate" in q:
+        keys += ["diplomatic", "terminate", "2 months", "commission"]
+    # Repairs
+    if "repair" in q or "broken" in q or "spoil" in q:
+        keys += ["s$200", "bulb", "tube", "air", "approval", "fair wear"]
+    # Return unit
+    if "return" in q or "handover" in q or "move out" in q:
+        keys += ["clean", "dry clean", "curtain", "joint inspection", "keys"]
+
+    return sum([1 for k in keys if k in t])
+    
+def _clause_priority(question: str):
+    q = (question or "").lower()
+
+    # --- 关键词桶（支持同义词/变体）—
+    buckets = {
+        "diplomatic": {
+            "keywords": [
+                "diplomatic", "terminate", "termination", "relocat", "transfer",
+                "deport", "refused permission", "work pass", "reside", "notice", "2 months"
+            ],
+            "clauses": ["5(c)", "5(d)", "5(f)"]
+        },
+        "repairs": {
+            "keywords": [
+                "repair", "repairs", "broken", "spoiled", "maintenance",
+                "s$200", "bulb", "tube", "aircon", "air con", "water heater",
+                "structural", "wear and tear", "approval", "landlord approval"
+            ],
+            "clauses": ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
+        },
+        "moveout": {
+            "keywords": [
+                "return", "move out", "handover", "hand over", "deliver up",
+                "clean", "dry clean", "curtain", "remove nails", "white putty",
+                "joint inspection", "keys", "furniture", "no rent"
+            ],
+            "clauses": ["2(y)", "2(z)", "6(o)"]
+        },
+        # 可按需加更多主题（押金、转租、宠物、访客、迟付租金等）
+        "deposit": {
+            "keywords": ["deposit", "security deposit", "forfeit", "deduct", "deduction"],
+            "clauses": []  # 先空着，等你标注具体条款再填
+        },
+        "pets": {
+            "keywords": ["pet", "pets", "animal"],
+            "clauses": []
+        }
+    }
+    
+    # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
+    def score_bucket(words, text):
+        return sum(1 for w in words if w in text)
+
+    scores = {k: score_bucket(v["keywords"], q) for k, v in buckets.items()}
+    # 取最高分的意图
+    best_topic = max(scores, key=scores.get) if scores else None
+    best_score = scores.get(best_topic, 0)
+
+    # --- 置信门槛（避免“弱匹配”触发优先条款）---
+    # 经验值：≥2 基本能判断出明确意图；否则交给默认相关性排序即可。
+    CONFIDENCE_THRESHOLD = 2
+    if best_score >= CONFIDENCE_THRESHOLD:
+        return buckets[best_topic]["clauses"]
+    return []  
+
+
+def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
+    """
+    Re-rank excerpts by (keyword relevance + soft clause priority).
+    用“关键词相关性 + 软优先条款加权”做重排。优先条款只+权重，不保证一定进前N；
+    这样在非目标问题上不至于“强行引用”错误条款。
+    """
+    prio = _clause_priority(question)  # 可能为空 → 不干预
+    ranked, seen = [], set()
+
+    for d in docs or []:
+        meta = getattr(d, "metadata", {}) or {}
+        page = meta.get("page")
+        content = (getattr(d, "page_content", "") or "").strip()
+        if not content:
+            continue
+
+        snippet = content[:400].replace("\n", " ")
+        clause = _extract_clause_id(content)
+
+        # 关键词相关性分
+        score = _keyword_score(question, snippet)
+
+        # 软优先：命中优先条款则 +5（而不是 +999 或强制塞入）
+        if prio and clause and clause.lower().replace("clause ", "") in [p.lower() for p in prio]:
+            score += 5
+
+        key = (page, clause, snippet[:60])
+        if key in seen:
+            continue
+        seen.add(key)
+        ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
+
+    # 排序取前N
+    ranked.sort(key=lambda x: x[0], reverse=True)
+    topn = [item for _, item in ranked[:max_items]]
+    return topn
+
+    
+def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
+        """Format final output / 包装最终输出格式"""
+        excerpts = _pick_excerpts(source_docs, question=user_q)
+        refs_lines = [
+            f"\"{ex['quote'][:230]}...\" ({ex['clause']}, page {ex['page']})"
+            for ex in excerpts
+        ]
+        ref_text = "\n".join(refs_lines) if refs_lines else "Not available."
+
+        return f"""{llm_answer.strip()}
+                🔎 Relevant Contract Excerpts:
+                {ref_text}
+                """
 
 # ======================= Sidebar (single‑page nav) / 侧栏导航 =======================
 with st.sidebar:
@@ -907,167 +1070,167 @@ apply_chat_input_visibility()
 # ========================= Pages / 页面（单文件切换）=========================
 # --- Contract Chat page / 合同问答 ---
 if st.session_state.page == "chat":
-    # ===== 满分格式工具（只在本页面用） =====
-    import re
-    from typing import List, Dict, Any
+    # # ===== 满分格式工具（只在本页面用） =====
+    # import re
+    # from typing import List, Dict, Any
 
-    FULL_SCORE_SYSTEM_PROMPT = """
-    You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
-    ALWAYS answer in this structure:
+    # FULL_SCORE_SYSTEM_PROMPT = """
+    # You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
+    # ALWAYS answer in this structure:
 
-    ✅ Answer:
-    <short, direct, actionable answer in 1–3 sentences>
+    # ✅ Answer:
+    # <short, direct, actionable answer in 1–3 sentences>
 
-    💡 Breakdown (must cover all that apply):
-    • Preconditions / timing (e.g., "after first 12 months")
-    • Exact limits / who pays / notice period (e.g., "2 months’ notice or 2 months’ rent")
-    • Required documents / approvals (e.g., "documentary proof", "landlord approval if > S$200")
-    • Important exceptions (e.g., "no diplomatic clause during renewal")
-    • Operational steps (e.g., "joint inspection, handover keys")
+    # 💡 Breakdown (must cover all that apply):
+    # • Preconditions / timing (e.g., "after first 12 months")
+    # • Exact limits / who pays / notice period (e.g., "2 months’ notice or 2 months’ rent")
+    # • Required documents / approvals (e.g., "documentary proof", "landlord approval if > S$200")
+    # • Important exceptions (e.g., "no diplomatic clause during renewal")
+    # • Operational steps (e.g., "joint inspection, handover keys")
 
-    🔎 Relevant Contract Excerpts:
-    "<verbatim quote 1>" (Clause <id>, page <n>)
-    "<verbatim quote 2>" (Clause <id>, page <n>)
+    # 🔎 Relevant Contract Excerpts:
+    # "<verbatim quote 1>" (Clause <id>, page <n>)
+    # "<verbatim quote 2>" (Clause <id>, page <n>)
 
-    Rules:
-    - Quote ONLY what’s in retrieved context. If not found, say: "Not mentioned in the contract. Please check with the landlord/agent."
-    - Keep numbers EXACT (S$200, 14 days, 7 days, 2 months).
-    - Never invent clause IDs/pages. If no clause ID is visible, include page only.
-    - Be concise and readable.
-    """
+    # Rules:
+    # - Quote ONLY what’s in retrieved context. If not found, say: "Not mentioned in the contract. Please check with the landlord/agent."
+    # - Keep numbers EXACT (S$200, 14 days, 7 days, 2 months).
+    # - Never invent clause IDs/pages. If no clause ID is visible, include page only.
+    # - Be concise and readable.
+    # """
 
-    _CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
+    # _CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
     
-    def _extract_clause_id(text: str) -> str:
-        """Extract clause number if exists / 若包含条款编号则提取"""
-        m = _CLAUSE_RE.search(text or "")
-        return m.group(1) if m else ""
+    # def _extract_clause_id(text: str) -> str:
+    #     """Extract clause number if exists / 若包含条款编号则提取"""
+    #     m = _CLAUSE_RE.search(text or "")
+    #     return m.group(1) if m else ""
     
-    def _keyword_score(question: str, text: str) -> int:
-        """Score relevance by keyword matching / 根据问题匹配关键词打分"""
-        q = (question or "").lower()
-        t = (text or "").lower()
+    # def _keyword_score(question: str, text: str) -> int:
+    #     """Score relevance by keyword matching / 根据问题匹配关键词打分"""
+    #     q = (question or "").lower()
+    #     t = (text or "").lower()
 
-        keys = []
-        # Diplomacy clause
-        if "diplomatic" in q or "relocat" in q or "terminate" in q:
-            keys += ["diplomatic", "terminate", "2 months", "commission"]
-        # Repairs
-        if "repair" in q or "broken" in q or "spoil" in q:
-            keys += ["s$200", "bulb", "tube", "air", "approval", "fair wear"]
-        # Return unit
-        if "return" in q or "handover" in q or "move out" in q:
-            keys += ["clean", "dry clean", "curtain", "joint inspection", "keys"]
+    #     keys = []
+    #     # Diplomacy clause
+    #     if "diplomatic" in q or "relocat" in q or "terminate" in q:
+    #         keys += ["diplomatic", "terminate", "2 months", "commission"]
+    #     # Repairs
+    #     if "repair" in q or "broken" in q or "spoil" in q:
+    #         keys += ["s$200", "bulb", "tube", "air", "approval", "fair wear"]
+    #     # Return unit
+    #     if "return" in q or "handover" in q or "move out" in q:
+    #         keys += ["clean", "dry clean", "curtain", "joint inspection", "keys"]
 
-        return sum([1 for k in keys if k in t])
+    #     return sum([1 for k in keys if k in t])
     
-    def _clause_priority(question: str):
-        q = (question or "").lower()
+    # def _clause_priority(question: str):
+    #     q = (question or "").lower()
 
-        # --- 关键词桶（支持同义词/变体）—
-        buckets = {
-            "diplomatic": {
-                "keywords": [
-                    "diplomatic", "terminate", "termination", "relocat", "transfer",
-                    "deport", "refused permission", "work pass", "reside", "notice", "2 months"
-                ],
-                "clauses": ["5(c)", "5(d)", "5(f)"]
-            },
-            "repairs": {
-                "keywords": [
-                    "repair", "repairs", "broken", "spoiled", "maintenance",
-                    "s$200", "bulb", "tube", "aircon", "air con", "water heater",
-                    "structural", "wear and tear", "approval", "landlord approval"
-                ],
-                "clauses": ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
-            },
-            "moveout": {
-                "keywords": [
-                    "return", "move out", "handover", "hand over", "deliver up",
-                    "clean", "dry clean", "curtain", "remove nails", "white putty",
-                    "joint inspection", "keys", "furniture", "no rent"
-                ],
-                "clauses": ["2(y)", "2(z)", "6(o)"]
-            },
-            # 可按需加更多主题（押金、转租、宠物、访客、迟付租金等）
-            "deposit": {
-                "keywords": ["deposit", "security deposit", "forfeit", "deduct", "deduction"],
-                "clauses": []  # 先空着，等你标注具体条款再填
-            },
-            "pets": {
-                "keywords": ["pet", "pets", "animal"],
-                "clauses": []
-            }
-        }
+    #     # --- 关键词桶（支持同义词/变体）—
+    #     buckets = {
+    #         "diplomatic": {
+    #             "keywords": [
+    #                 "diplomatic", "terminate", "termination", "relocat", "transfer",
+    #                 "deport", "refused permission", "work pass", "reside", "notice", "2 months"
+    #             ],
+    #             "clauses": ["5(c)", "5(d)", "5(f)"]
+    #         },
+    #         "repairs": {
+    #             "keywords": [
+    #                 "repair", "repairs", "broken", "spoiled", "maintenance",
+    #                 "s$200", "bulb", "tube", "aircon", "air con", "water heater",
+    #                 "structural", "wear and tear", "approval", "landlord approval"
+    #             ],
+    #             "clauses": ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
+    #         },
+    #         "moveout": {
+    #             "keywords": [
+    #                 "return", "move out", "handover", "hand over", "deliver up",
+    #                 "clean", "dry clean", "curtain", "remove nails", "white putty",
+    #                 "joint inspection", "keys", "furniture", "no rent"
+    #             ],
+    #             "clauses": ["2(y)", "2(z)", "6(o)"]
+    #         },
+    #         # 可按需加更多主题（押金、转租、宠物、访客、迟付租金等）
+    #         "deposit": {
+    #             "keywords": ["deposit", "security deposit", "forfeit", "deduct", "deduction"],
+    #             "clauses": []  # 先空着，等你标注具体条款再填
+    #         },
+    #         "pets": {
+    #             "keywords": ["pet", "pets", "animal"],
+    #             "clauses": []
+    #         }
+    #     }
         
-        # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
-        def score_bucket(words, text):
-            return sum(1 for w in words if w in text)
+    #     # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
+    #     def score_bucket(words, text):
+    #         return sum(1 for w in words if w in text)
 
-        scores = {k: score_bucket(v["keywords"], q) for k, v in buckets.items()}
-        # 取最高分的意图
-        best_topic = max(scores, key=scores.get) if scores else None
-        best_score = scores.get(best_topic, 0)
+    #     scores = {k: score_bucket(v["keywords"], q) for k, v in buckets.items()}
+    #     # 取最高分的意图
+    #     best_topic = max(scores, key=scores.get) if scores else None
+    #     best_score = scores.get(best_topic, 0)
 
-        # --- 置信门槛（避免“弱匹配”触发优先条款）---
-        # 经验值：≥2 基本能判断出明确意图；否则交给默认相关性排序即可。
-        CONFIDENCE_THRESHOLD = 2
-        if best_score >= CONFIDENCE_THRESHOLD:
-            return buckets[best_topic]["clauses"]
-        return []  
+    #     # --- 置信门槛（避免“弱匹配”触发优先条款）---
+    #     # 经验值：≥2 基本能判断出明确意图；否则交给默认相关性排序即可。
+    #     CONFIDENCE_THRESHOLD = 2
+    #     if best_score >= CONFIDENCE_THRESHOLD:
+    #         return buckets[best_topic]["clauses"]
+    #     return []  
 
     
-    def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
-        """
-        Re-rank excerpts by (keyword relevance + soft clause priority).
-        用“关键词相关性 + 软优先条款加权”做重排。优先条款只+权重，不保证一定进前N；
-        这样在非目标问题上不至于“强行引用”错误条款。
-        """
-        prio = _clause_priority(question)  # 可能为空 → 不干预
-        ranked, seen = [], set()
+    # def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
+    #     """
+    #     Re-rank excerpts by (keyword relevance + soft clause priority).
+    #     用“关键词相关性 + 软优先条款加权”做重排。优先条款只+权重，不保证一定进前N；
+    #     这样在非目标问题上不至于“强行引用”错误条款。
+    #     """
+    #     prio = _clause_priority(question)  # 可能为空 → 不干预
+    #     ranked, seen = [], set()
 
-        for d in docs or []:
-            meta = getattr(d, "metadata", {}) or {}
-            page = meta.get("page")
-            content = (getattr(d, "page_content", "") or "").strip()
-            if not content:
-                continue
+    #     for d in docs or []:
+    #         meta = getattr(d, "metadata", {}) or {}
+    #         page = meta.get("page")
+    #         content = (getattr(d, "page_content", "") or "").strip()
+    #         if not content:
+    #             continue
 
-            snippet = content[:400].replace("\n", " ")
-            clause = _extract_clause_id(content)
+    #         snippet = content[:400].replace("\n", " ")
+    #         clause = _extract_clause_id(content)
 
-            # 关键词相关性分
-            score = _keyword_score(question, snippet)
+    #         # 关键词相关性分
+    #         score = _keyword_score(question, snippet)
 
-            # 软优先：命中优先条款则 +5（而不是 +999 或强制塞入）
-            if prio and clause and clause.lower().replace("clause ", "") in [p.lower() for p in prio]:
-                score += 5
+    #         # 软优先：命中优先条款则 +5（而不是 +999 或强制塞入）
+    #         if prio and clause and clause.lower().replace("clause ", "") in [p.lower() for p in prio]:
+    #             score += 5
 
-            key = (page, clause, snippet[:60])
-            if key in seen:
-                continue
-            seen.add(key)
-            ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
+    #         key = (page, clause, snippet[:60])
+    #         if key in seen:
+    #             continue
+    #         seen.add(key)
+    #         ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
 
-        # 排序取前N
-        ranked.sort(key=lambda x: x[0], reverse=True)
-        topn = [item for _, item in ranked[:max_items]]
-        return topn
+    #     # 排序取前N
+    #     ranked.sort(key=lambda x: x[0], reverse=True)
+    #     topn = [item for _, item in ranked[:max_items]]
+    #     return topn
 
         
-    def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
-            """Format final output / 包装最终输出格式"""
-            excerpts = _pick_excerpts(source_docs, question=user_q)
-            refs_lines = [
-                f"\"{ex['quote'][:230]}...\" ({ex['clause']}, page {ex['page']})"
-                for ex in excerpts
-            ]
-            ref_text = "\n".join(refs_lines) if refs_lines else "Not available."
+    # def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
+    #         """Format final output / 包装最终输出格式"""
+    #         excerpts = _pick_excerpts(source_docs, question=user_q)
+    #         refs_lines = [
+    #             f"\"{ex['quote'][:230]}...\" ({ex['clause']}, page {ex['page']})"
+    #             for ex in excerpts
+    #         ]
+    #         ref_text = "\n".join(refs_lines) if refs_lines else "Not available."
 
-            return f"""{llm_answer.strip()}
-                    🔎 Relevant Contract Excerpts:
-                    {ref_text}
-                    """
+    #         return f"""{llm_answer.strip()}
+    #                 🔎 Relevant Contract Excerpts:
+    #                 {ref_text}
+    #                 """
 
     # ===== 页面 UI =====
     is_zh = st.session_state.lang == "zh"
