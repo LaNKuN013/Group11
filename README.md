@@ -226,11 +226,11 @@ Choose **English / 中文** in the sidebar.
 ---
 
 ## ⚠️ Troubleshooting
-| Issue | Fix |
-|------|-----|
-| 429 insufficient_quota | Change OpenAI key |
-| DB connection failed | Check DATABASE_URL + Neon IP policy |
-| RAG not responding | Upload PDF → Build/Refresh → ask contract-specific questions |
+| Issue                                                    | Explanation / Solution                                                                                                                           |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **429: insufficient_quota** (OpenAI quota exceeded)      | Your API key has no remaining quota or billing issue. Replace the key or check OpenAI billing.                                                   |
+| **DB connection failed**                                 | Verify `DATABASE_URL`, ensure Neon allows external connections/IP, confirm database exists.                                                      |
+| **Build/Refresh does nothing or answers are irrelevant** | Ensure PDF was uploaded → click **Build/Refresh** → ask specific contract-related questions. You may click **Reset Knowledge Base** and rebuild. |
 
 ---
 
