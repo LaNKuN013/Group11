@@ -33,7 +33,24 @@ warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
 
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
+
 _CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
+
+# 识别 FIN/证件号等（出现则基本是移民/身份校验页面 → 噪声）
+_FIN_RE = re.compile(r"\bFIN[:\s]*[A-Z]\d{7}[A-Z]\b")
+# 常见模板/免责声明/页眉页脚/移民检查等噪声关键词
+_NOISE_PHRASES = [
+    "TENANCY AGREEMENT (PRIVATE CONDO/APARTMENT)",
+    "LEG-AG-",
+    "Disclaimer:",
+    "This is a general document which may not be appropriate",
+    "In the event of a dispute",
+    "IMMIGRATION LAWS AND CHECKS FOR FOREIGN TENANTS",
+    "Produce the following documents",
+    "Long-Term Visit Pass", "Student's Pass", "Dependent",
+    "Page",  # 配合页眉页脚判断
+    "placeholders or fictional information",  # 模板提示
+]
 
 # --- 主题常量（NUS 配色） ---
 NUS_BLUE = "#00205B"
@@ -832,9 +849,97 @@ def render_message(role, content, ts=None):
 
 # ---- RAG excerpt ranking helpers / RAG 摘录排序辅助 ----
 def _extract_clause_id(text: str) -> str:
-        """Extract clause number if exists / 若包含条款编号则提取"""
-        m = _CLAUSE_RE.search(text or "")
-        return m.group(1) if m else ""
+    m = _CLAUSE_RE.search(text or "")
+    return m.group(1) if m else ""
+
+def _looks_like_noise(text: str) -> bool:
+    """判定该片段是否属于模板/免责声明/移民检查/个人信息列表等噪声。"""
+    t = (text or "")
+    low = t.lower()
+
+    # 过短 or 主要是页眉/页脚
+    if len(t.strip()) < 40:
+        return True
+
+    # 出现大段“Page x of y”这类页眉页脚/目录噪声
+    if re.search(r"\bpage\s+\d+\s+of\s+\d+\b", low):
+        return True
+
+    # 出现 FIN 号 / 身份清单
+    if _FIN_RE.search(t):
+        return True
+
+    # 模板/免责声明/移民检查等关键词
+    for p in _NOISE_PHRASES:
+        if p.lower() in low:
+            return True
+
+    # 若完全不含单词的“legal/contract”风格关键词，又数字比例异常高，也当噪声
+    # （防止把表格号/编号串当作正文）
+    digits = sum(ch.isdigit() for ch in t)
+    if digits >= max(20, len(t) // 3) and ("clause" not in low):
+        return True
+
+    return False
+
+def _clean_snippet(text: str) -> str:
+    """
+    清洗 PDF 提取的脏文本：
+    - 去零宽字符/软换行/奇怪空格
+    - 合并被拆开的货币/数值（S $ 200 / S 200 → S$200）
+    - 把多空白压成一个空格，避免“逐字竖排”
+    """
+    s = (text or "")
+
+    # 去掉零宽/软连字符等
+    s = s.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "").replace("\ufeff", "")
+    s = s.replace("\xad", "")  # soft hyphen
+    # 统一换行为空格
+    s = s.replace("\r", " ").replace("\n", " ")
+
+    # 规整 "S $ 200" / "S$ 200" / "S 200" → "S$200"
+    # 先把 S $ / S$ 间空白去掉
+    s = re.sub(r"S\s*\$\s*", "S$", s)
+    # 有些 PDF 把 $ 丢了，但前缀 S 与数字间断开，这里不盲目补 $，只合并空格： "S 200" → "S 200"（保持原样）
+    # 若你确认所有金额都是新币，可酌情启用下面一行把 "S 200" 也变 "S$200"
+    # s = re.sub(r"\bS\s+(\d[\d,\.]*)\b", r"S$\1", s)
+
+    # 把 "S$ 200" → "S$200"
+    s = re.sub(r"S\$\s+(\d[\d,\.]*)", r"S$\1", s)
+
+    # 压缩多余空白
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+# ========= 关键词打分（覆盖你原来的 _keyword_score） ========= #
+
+def _keyword_score(question: str, text: str) -> int:
+    """根据问题意图给片段相关性打分（仅做加分；不过度放大）"""
+    q = (question or "").lower()
+    t = (text or "").lower()
+
+    score = 0
+    # Diplomatic
+    if any(k in q for k in ["diplomatic", "relocat", "terminate", "termination", "work pass", "deport", "refused"]):
+        if "diplomatic" in t: score += 2
+        if "2 months" in t: score += 1
+        if "notice" in t: score += 1
+    # Repairs / S$200 / aircon / heater / structural
+    if any(k in q for k in ["repair", "repairs", "broken", "spoil", "spoiled", "maintenance"]):
+        if "s$200" in t or "200" in t: score += 2
+        for k in ["minor repair", "approval", "landlord approval", "fair wear", "air con", "aircon", "water heater", "structural"]:
+            if k in t: score += 1
+    # Move-out / return
+    if any(k in q for k in ["return", "handover", "hand over", "move out", "deliver up"]):
+        for k in ["clean", "dry clean", "curtain", "remove nails", "white putty", "joint inspection", "keys", "no rent"]:
+            if k in t: score += 1
+
+    return score
+
+# def _extract_clause_id(text: str) -> str:
+#         """Extract clause number if exists / 若包含条款编号则提取"""
+#         m = _CLAUSE_RE.search(text or "")
+#         return m.group(1) if m else ""
     
 # def _keyword_score(question: str, text: str) -> int:
 #     """Score relevance by keyword matching / 根据问题匹配关键词打分"""
@@ -854,61 +959,6 @@ def _extract_clause_id(text: str) -> str:
 
 #     return sum([1 for k in keys if k in t])
 
-def _keyword_score(question: str, text: str) -> int:
-    """
-    Score relevance based on keyword matching (EN + ZH + numeric)
-    与 _clause_priority 使用完全相同的关键词体系
-    """
-    q = (question or "").lower().strip()
-    t = (text or "").lower().strip()
-
-    # 预处理，避免文本中出现 S\n200 / 2\nMonths 拆开导致漏判
-    t = t.replace("\n", " ").replace("  ", " ")
-
-    # 主题 → 关键词 (与 _clause_priority 100% 一致)
-    topic_keywords = [
-        # Diplomatic clause
-        ["diplomatic", "deport", "relocat", "transfer", "refused", "work pass", "reside",
-         "terminate", "termination", "notice", "2 months", "外交", "遣返", "调任", "终止"],
-
-        # Repairs / S$200 / bulbs / aircon / etc
-        ["repair", "repairs", "broken", "spoil", "maintenance", "minor repair",
-         "s$200", "s$ 200", "sgd 200", "200", "bulb", "tube", "aircon", "air con",
-         "water heater", "structural", "wear and tear", "approval", "landlord approval",
-         "维修", "损坏", "灯泡", "灯管", "空调", "热水器", "结构", "正常损耗", "批准"],
-
-        # Move-out / handover / cleaning / curtain / joint inspection / no rent
-        ["move out", "handover", "hand over", "deliver", "return", "clean",
-         "professional cleaning", "curtain", "dry clean", "joint inspection", "keys",
-         "no rent", "退租", "交屋", "清洁", "窗帘", "干洗", "验房", "钥匙"],
-
-        # Deposit
-        ["deposit", "security deposit", "refund", "forfeit", "deduct", "deduction", "押金", "退还", "抵扣"],
-
-        # Rent late
-        ["late rent", "late payment", "interest", "penalty", "迟付", "滞纳金", "利息"],
-
-        # Pets
-        ["pet", "pets", "animal", "宠物"],
-
-        # Alterations / drill / hook / painting / holes
-        ["alteration", "drill", "hole", "nail", "hook", "paint", "white putty",
-         "改装", "打孔", "钉子", "挂钩", "粉刷", "腻子"],
-
-        # Sublet / long stay
-        ["sublet", "sub-letting", "assign", "license", "lodger", "long stay",
-         "转租", "分租", "长期居住", "寄宿"],
-    ]
-
-    score = 0
-    for kws in topic_keywords:
-        for k in kws:
-            if k in q:      # 用户问题命中
-                # 提高 stability，把文本中所有键做 replace 检测
-                if k in t:
-                    score += 1
-
-    return score
 
 def _clause_priority(question: str):
     """
@@ -1098,56 +1148,59 @@ def _clause_priority(question: str):
 #     return []  
 
 
-def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
-    """
-    Re-rank excerpts by (keyword relevance + soft clause priority).
-    用“关键词相关性 + 软优先条款加权”做重排。优先条款只+权重，不保证一定进前N；
-    这样在非目标问题上不至于“强行引用”错误条款。
-    """
-    prio = _clause_priority(question)  # 可能为空 → 不干预
+def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = "") -> List[Dict[str, str]]:
+    """清洗 → 过滤噪声 → 相关性打分 → 软优先条款加权 → 取前N"""
+    prio = [p.lower().replace("clause", "").strip() for p in _clause_priority(question)]
     ranked, seen = [], set()
 
     for d in docs or []:
+        raw = (getattr(d, "page_content", "") or "")
         meta = getattr(d, "metadata", {}) or {}
         page = meta.get("page")
-        content = (getattr(d, "page_content", "") or "").strip()
+
+        # 清洗
+        content = _clean_snippet(raw)
         if not content:
             continue
+        # 过滤噪声（Disclaimer/移民检查/个人信息/页眉页脚等）
+        if _looks_like_noise(content):
+            continue
 
-        snippet = content[:400].replace("\n", " ")
-        clause = _extract_clause_id(content)
-
-        # 关键词相关性分
+        # 抽取条款号 + 相关性打分
+        clause_raw = _extract_clause_id(content) or ""
+        clause_norm = clause_raw.lower().replace("clause", "").strip() if clause_raw else ""
+        snippet = content[:400]
         score = _keyword_score(question, snippet)
 
-        # 软优先：命中优先条款则 +5（而不是 +999 或强制塞入）
-        if prio and clause and clause.lower().replace("clause ", "") in [p.lower() for p in prio]:
-            score += 5
+        # 软优先（命中优先条款 +3）
+        if prio and clause_norm in prio:
+            score += 3
 
-        key = (page, clause, snippet[:60])
+        key = (page, clause_raw, snippet[:60])
         if key in seen:
             continue
         seen.add(key)
-        ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
 
-    # 排序取前N
+        ranked.append((score, {"quote": snippet, "page": page, "clause": clause_raw}))
+
     ranked.sort(key=lambda x: x[0], reverse=True)
-    topn = [item for _, item in ranked[:max_items]]
-    return topn
+    return [item for _, item in ranked[:max_items]]
 
-def _escape_md_dollar(s: str) -> str:
-    # 把所有 $ 转义，避免 Streamlit/Markdown 进 LaTeX 模式
-    return (s or "").replace("$", r"\$")
+
+# def _escape_md_dollar(s: str) -> str:
+#     # 把所有 $ 转义，避免 Streamlit/Markdown 进 LaTeX 模式
+#     return (s or "").replace("$", r"\$")
 
 def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
+    text = (llm_answer or "").strip()
+
     excerpts = _pick_excerpts(source_docs, question=user_q, max_items=3)
     if not excerpts:
         return "Not mentioned in the contract."
 
-    # 组装引用（保持你现有逻辑）
     refs_lines = []
     for ex in excerpts:
-        q = (ex.get("quote") or "").strip().replace("\n", " ")
+        q = _clean_snippet(ex.get("quote") or "")
         if len(q) > 230:
             q = q[:230] + "..."
         clause = (ex.get("clause") or "").strip()
@@ -1161,14 +1214,41 @@ def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any])
 
     refs_block = "🔎 Relevant Contract Excerpts:\n" + "\n".join(refs_lines)
 
-    # 转义 $（同时也转义引用块里的）
-    body = _escape_md_dollar((llm_answer or "").strip())
-    refs_block = _escape_md_dollar(refs_block)
+    # 如果模型没按模板给“Excerpts”，就附上
+    if "🔎" not in text and "Relevant Contract Excerpts" not in text:
+        return f"{text}\n\n{refs_block}"
+    return text
 
-    # 若 LLM 没带“Excerpts”段，追加
-    if "contract excerpts" not in body.lower():
-        return f"{body}\n\n{refs_block}"
-    return body
+# def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
+#     excerpts = _pick_excerpts(source_docs, question=user_q, max_items=3)
+#     if not excerpts:
+#         return "Not mentioned in the contract."
+
+#     # 组装引用（保持你现有逻辑）
+#     refs_lines = []
+#     for ex in excerpts:
+#         q = (ex.get("quote") or "").strip().replace("\n", " ")
+#         if len(q) > 230:
+#             q = q[:230] + "..."
+#         clause = (ex.get("clause") or "").strip()
+#         page = ex.get("page")
+#         if clause and page is not None:
+#             refs_lines.append(f"\"{q}\" ({clause}, page {page})")
+#         elif page is not None:
+#             refs_lines.append(f"\"{q}\" (page {page})")
+#         else:
+#             refs_lines.append(f"\"{q}\" (contract)")
+
+#     refs_block = "🔎 Relevant Contract Excerpts:\n" + "\n".join(refs_lines)
+
+#     # 转义 $（同时也转义引用块里的）
+#     body = _escape_md_dollar((llm_answer or "").strip())
+#     refs_block = _escape_md_dollar(refs_block)
+
+#     # 若 LLM 没带“Excerpts”段，追加
+#     if "contract excerpts" not in body.lower():
+#         return f"{body}\n\n{refs_block}"
+#     return body
 
 # ======================= Sidebar (single‑page nav) / 侧栏导航 =======================
 with st.sidebar:
