@@ -309,60 +309,6 @@ def lazy_import_psycopg():
         raise RuntimeError(f"psycopg2 not available: {e}")
 
 
-# def lazy_import_langchain():
-#     """Import LangChain stack lazily for RAG functions.
-#     RAG 相关依赖在真正需要时再导入，避免非RAG场景拖慢。"""
-#     try:
-#         from langchain_community.document_loaders import PyPDFLoader
-#         from langchain.text_splitter import RecursiveCharacterTextSplitter
-#         from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-#         from langchain_community.vectorstores import FAISS
-#         from langchain.chains import ConversationalRetrievalChain
-#         from langchain.memory import ConversationBufferMemory
-#         return {
-#             "PyPDFLoader": PyPDFLoader,
-#             "RecursiveCharacterTextSplitter": RecursiveCharacterTextSplitter,
-#             "OpenAIEmbeddings": OpenAIEmbeddings,
-#             "ChatOpenAI": ChatOpenAI,
-#             "FAISS": FAISS,
-#             "ConversationalRetrievalChain": ConversationalRetrievalChain,
-#             "ConversationBufferMemory": ConversationBufferMemory,
-#         }
-#     except Exception as e:
-#         # Surface actionable pip command / 明确提示安装命令
-#         raise RuntimeError(
-#             "LangChain stack missing. Install:\n"
-#             "pip install langchain langchain-openai openai pypdf faiss-cpu\n"
-#             f"Details: {e}"
-#         )
-
-# def lazy_import_langchain():
-#     if "lc_stack" in st.session_state:
-#         return st.session_state["lc_stack"]
-#     try:
-#         from langchain_community.document_loaders import PyPDFLoader
-#         from langchain.text_splitter import RecursiveCharacterTextSplitter
-#         from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-#         from langchain_community.vectorstores import FAISS
-#         from langchain.chains import ConversationalRetrievalChain
-#         from langchain.memory import ConversationBufferMemory
-#         st.session_state["lc_stack"] = {
-#             "PyPDFLoader": PyPDFLoader,
-#             "RecursiveCharacterTextSplitter": RecursiveCharacterTextSplitter,
-#             "OpenAIEmbeddings": OpenAIEmbeddings,
-#             "ChatOpenAI": ChatOpenAI,
-#             "FAISS": FAISS,
-#             "ConversationalRetrievalChain": ConversationalRetrievalChain,
-#             "ConversationBufferMemory": ConversationBufferMemory,
-#         }
-#         return st.session_state["lc_stack"]
-#     except Exception as e:
-#         raise RuntimeError(
-#             "LangChain stack missing. Install:\n"
-#             "  pip install langchain langchain-openai openai pypdf faiss-cpu\n"
-#             f"Details: {e}"
-#         )
-
 def lazy_import_langchain():
     """
     Import LangChain stack lazily for RAG functions.
@@ -811,22 +757,6 @@ def guard_language_and_offer_switch(user_text: str) -> bool:
 
     return False
 
-# def local_image_base64(path: str) -> str | None:
-#     try:
-#         if not os.path.isabs(path):
-#             # 相对脚本目录，避免“Downloads/Downloads/...”问题
-#             path = os.path.join(os.path.dirname(__file__), path)
-#         if not os.path.exists(path):
-#             return None
-#         with open(path, "rb") as f:
-#             return "data:image/png;base64," + base64.b64encode(f.read()).decode()
-#     except Exception:
-#         return None
-
-# # 全局只读一次（放在 import 后）
-# ASSISTANT_AVATAR = local_image_base64("chatbot_image.png")  # 放在 .py 同级；或 images/chatbot.png
-# USER_AVATAR      = local_image_base64("an7tvcylywfb1.jpg")  # 可选用户头像
-
 # ===== Message rendering with avatars / 带头像的消息渲染 =====
 def _b64_once(state_key: str, path: str) -> str | None:
     if state_key in st.session_state:
@@ -1115,10 +1045,17 @@ apply_chat_input_visibility()
 
 # --- Contract Chat page / 合同问答 ---
 if st.session_state.page == "chat":
-    # ===== 满分格式工具（只在本页面用） =====
+    """
+    ===============================
+      CONTRACT CHAT (满分输出模式)
+      Full-score Answering Format
+    ===============================
+    """
+
     import re
     from typing import List, Dict, Any
 
+    # === Full Score Prompt：严格引导输出结构 ===
     FULL_SCORE_SYSTEM_PROMPT = """
 You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
 ALWAYS answer in this structure:
@@ -1126,12 +1063,12 @@ ALWAYS answer in this structure:
 ✅ Answer:
 <short, direct, actionable answer in 1–3 sentences>
 
-💡 Breakdown (must cover all that apply):
-• Preconditions / timing (e.g., "after first 12 months")
-• Exact limits / who pays / notice period (e.g., "2 months’ notice / 2 months’ rent in lieu")
-• Required documents / approvals (e.g., "documentary proof", "landlord approval if > S$200")
-• Important exceptions (e.g., "no diplomatic clause during renewal term")
-• Operational steps (e.g., "joint inspection, return keys")
+💡 Breakdown (must include and use EXACT bullet labels):
+• Preconditions / timing:
+• Exact limits (numbers / notice period / who pays):
+• Required documents / approvals:
+• Exceptions (when this rule does NOT apply):
+• Operational steps (if applicable):
 
 🔎 Relevant Contract Excerpts:
 "<verbatim quote 1>" (Clause <id>, page <n>)
@@ -1140,12 +1077,11 @@ ALWAYS answer in this structure:
 Rules:
 - Use ONLY information from retrieved context; If not found, say: "Not mentioned in the contract."
 - Keep key numbers EXACT (S$200, 14 days, 7 days, 2 months).
-- Do NOT invent clause number / page number; only include if visible.
+- Do NOT invent clause numbers / page numbers; only include if visible.
 """
 
-    # ========= 条款匹配与精准引用 ========= #
+    # ====== 条款匹配 / Excerpt 提取 ======
 
-    # regex 检出 "Clause 5(c)" 等格式
     _CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
 
     def _extract_clause_id(text: str) -> str:
@@ -1153,211 +1089,135 @@ Rules:
         return m.group(1) if m else ""
 
     def _keyword_score(question: str, text: str) -> int:
-        """根据问题匹配关键词，给 snippet 打分"""
+        """根据关键词与问题的匹配程度打分"""
         q = (question or "").lower()
         t = (text or "").lower()
 
         keys = []
-        if "diplomatic" in q or "relocate" in q or "terminate" in q:
+        if "diplomatic" in q or "relocat" in q or "terminate" in q:
             keys += ["diplomatic", "terminate", "relocat", "deport", "refused", "2 months", "commission"]
         if "repair" in q or "broken" in q or "spoil" in q:
-            keys += ["s$200", "minor repair", "air con", "aircon", "water heater", "structural", "bulb", "tube", "approval"]
+            keys += ["s$200", "minor repair", "air con", "aircon", "bulb", "tube", "approval", "structural", "wear and tear"]
         if "return" in q or "handover" in q or "move out" in q:
             keys += ["clean", "dry clean", "curtain", "remove nails", "white putty", "joint inspection", "keys", "no rent"]
 
-        score = sum([1 for k in keys if k in t])
-        return score
+        return sum(1 for k in keys if k in t)
 
-    # def _clause_priority(question: str):
-    #     """特定类型问题优先指向特定 Clause"""
-    #     q = (question or "").lower()
-    #     if "diplomatic" in q:
-    #         return ["5(c)", "5(d)", "5(f)"]
-    #     if "repair" in q or "broken" in q or "spoil" in q:
-    #         return ["2(i)", "2(g)", "2(j)", "2(e)", "2(k)", "4(c)"]
-    #     if "return" in q or "handover" in q or "move out" in q:
-    #         return ["2(y)", "2(z)", "6(o)"]
-    #     return []
-    
     def _clause_priority(question: str):
         """
-        Smart clause-priority by intent scoring with a confidence threshold.
-        根据问题做“意图打分”，只有当意图足够明确时才返回优先条款；否则返回空列表，不干预默认排序。
-        这样避免对其他问题“显得傻”或过拟合。
+        Smart clause priority: only prioritize clauses when confidence is high.
+        避免对 unrelated 问题输出固定 clause 显得“傻”。
         """
         q = (question or "").lower()
 
-        # --- 关键词桶（支持同义词/变体）—
         buckets = {
             "diplomatic": {
-                "keywords": [
-                    "diplomatic", "terminate", "termination", "relocat", "transfer",
-                    "deport", "refused permission", "work pass", "reside", "notice", "2 months"
-                ],
+                "keywords": ["diplomatic", "terminate", "relocat", "deport", "refused", "2 months"],
                 "clauses": ["5(c)", "5(d)", "5(f)"]
             },
             "repairs": {
-                "keywords": [
-                    "repair", "repairs", "broken", "spoiled", "maintenance",
-                    "s$200", "bulb", "tube", "aircon", "air con", "water heater",
-                    "structural", "wear and tear", "approval", "landlord approval"
-                ],
+                "keywords": ["repair", "broken", "spoil", "mainten", "s$200", "bulb", "tube", "aircon", "water heater"],
                 "clauses": ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
             },
             "moveout": {
-                "keywords": [
-                    "return", "move out", "handover", "hand over", "deliver up",
-                    "clean", "dry clean", "curtain", "remove nails", "white putty",
-                    "joint inspection", "keys", "furniture", "no rent"
-                ],
+                "keywords": ["return", "handover", "move out", "deliver up", "curtain", "clean", "white putty", "no rent"],
                 "clauses": ["2(y)", "2(z)", "6(o)"]
             },
-            # 可按需加更多主题（押金、转租、宠物、访客、迟付租金等）
-            "deposit": {
-                "keywords": ["deposit", "security deposit", "forfeit", "deduct", "deduction"],
-                "clauses": []  # 先空着，等你标注具体条款再填
-            },
-            "pets": {
-                "keywords": ["pet", "pets", "animal"],
-                "clauses": []
-            }
-    }
+        }
 
-    # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
         def score_bucket(words, text):
             return sum(1 for w in words if w in text)
 
         scores = {k: score_bucket(v["keywords"], q) for k, v in buckets.items()}
-        # 取最高分的意图
-        best_topic = max(scores, key=scores.get) if scores else None
-        best_score = scores.get(best_topic, 0)
-
-        # --- 置信门槛（避免“弱匹配”触发优先条款）---
-        # 经验值：≥2 基本能判断出明确意图；否则交给默认相关性排序即可。
-        CONFIDENCE_THRESHOLD = 2
-        if best_score >= CONFIDENCE_THRESHOLD:
+        best_topic = max(scores, key=scores.get)
+        if scores[best_topic] >= 2:
             return buckets[best_topic]["clauses"]
-        return []  # 不启用优先条款 → 不会“傻”
+
+        return []  # confidence 不够，不强制干预
 
     def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
         """
-        Re-rank excerpts by (keyword relevance + soft clause priority).
-        用“关键词相关性 + 软优先条款加权”做重排。优先条款只+权重，不保证一定进前N；
-        这样在非目标问题上不至于“强行引用”错误条款。
+        Smart excerpt re-ranking using: relevance_score + clause_priority(boost)
+        确保引用的 snippet 非 placeholder，不再出现与答题无关的片段。
         """
-        prio = _clause_priority(question)  # 可能为空 → 不干预
+        prio = _clause_priority(question)
         ranked, seen = [], set()
 
         for d in docs or []:
             meta = getattr(d, "metadata", {}) or {}
             page = meta.get("page")
             content = (getattr(d, "page_content", "") or "").strip()
+
             if not content:
                 continue
 
-            snippet = content[:400].replace("\n", " ")
+            # ❌ 过滤不相关 snippet
+            if "COMPLIANCE WITH LAW" in content or "placeholder" in content:
+                continue
+
+            snippet = content[:350].replace("\n", " ")
             clause = _extract_clause_id(content)
 
-            # 关键词相关性分
             score = _keyword_score(question, snippet)
-
-            # 软优先：命中优先条款则 +5（而不是 +999 或强制塞入）
-            if prio and clause and clause.lower().replace("clause ", "") in [p.lower() for p in prio]:
+            if prio and clause in prio:
                 score += 5
 
-            key = (page, clause, snippet[:60])
+            key = (page, clause, snippet[:40])
             if key in seen:
                 continue
             seen.add(key)
+
             ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
 
-        # 排序取前N
         ranked.sort(key=lambda x: x[0], reverse=True)
-        topn = [item for _, item in ranked[:max_items]]
+        return [item for _, item in ranked[:max_items]]
 
-        # 可选：如果明确有优先条款但没进前N，且你“必须覆盖”，可以尝试温和补充（不推荐默认开启）
-        # 例如在 prio 非空且 topn 中没有任何 prio 子集时，适度回查向量库补 1 条
-        # ——为了稳妥，这里给出注释模板，你可以按需要开启：
-        #
-        # if prio and not any((e.get("clause") or "").lower().replace("clause ", "") in [p.lower() for p in prio] for e in topn):
-        #     if "vectorstore" in st.session_state:
-        #         try:
-        #             retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 6})
-        #             # 用条款号或关键词做一次回查
-        #             probe = " OR ".join(prio)
-        #             extra_docs = retr.get_relevant_documents(probe)
-        #             for ed in extra_docs:
-        #                 snip = (ed.page_content or "")[:400].replace("\n", " ")
-        #                 cl = _extract_clause_id(ed.page_content or "")
-        #                 if cl and cl.lower().replace("clause ", "") in [p.lower() for p in prio]:
-        #                     topn.append({"quote": snip, "page": ed.metadata.get("page"), "clause": cl})
-        #                     break
-        #         except Exception:
-        #             pass
-        #
-        return topn
-    
+    def format_contract_answer(user_q: str, llm_answer: str, docs: List[Any]) -> str:
+        """格式化为：Answer + Breakdown + Contract excerpts"""
+        excerpts = _pick_excerpts(docs, max_items=3, question=user_q)
 
-    def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
-        excerpts = _pick_excerpts(source_docs, max_items=3, question=user_q)
-        lower_ans = (llm_answer or "").lower()
-        is_refusal = ("not mentioned" in lower_ans) or (not excerpts)
+        if not excerpts:
+            return "Not mentioned in the contract."
 
-        refs_lines = []
-        if not is_refusal:
-            for ex in excerpts:
-                tag = []
-                if ex.get("clause"):
-                    tag.append(ex["clause"])
-                if ex.get("page") is not None:
-                    tag.append(f"page {ex['page']}")
-                refs_lines.append(f"\"{ex['quote'][:240]}...\" ({', '.join(tag)})")
-
-        refs_block = "🔎 Relevant Contract Excerpts:\n" + ("\n".join(refs_lines) if refs_lines else "Not available.")
+        refs = "\n".join(
+            f"\"{e['quote']}...\" ({e['clause']}, page {e['page']})"
+            if e["clause"] else
+            f"\"{e['quote']}...\" (page {e['page']})"
+            for e in excerpts
+        )
 
         return f"""{llm_answer.strip()}
 
-{refs_block}
+🔎 Relevant Contract Excerpts:
+{refs}
 """
 
-    # ========== 页面/UI ========= #
+    # ===== 页面 UI =====
     is_zh = st.session_state.lang == "zh"
-    st.title("租客聊天助手" if is_zh else "Tenant Chatbot Assistant")
-    st.caption("基于已上传的租赁合同进行问答" if is_zh else "Contract-aware Q&A using uploaded tenancy documents.")
+    st.title("租客合同问答" if is_zh else "Contract Q&A Assistant")
+    st.caption("Full-score contract answering • 提供逐条条款引用")
 
     uploaded = st.file_uploader(
-        "上传租赁合同或房屋守则（PDF）" if is_zh else "Upload PDF contracts or house rules",
+        "上传租赁合同 PDF" if is_zh else "Upload tenancy agreement (PDF)",
         type="pdf",
         accept_multiple_files=True,
         key=f"kb_uploader_{st.session_state.get('uploader_key', 0)}",
     )
 
-    if uploaded and len(uploaded) > 0:
+    if uploaded:
         st.session_state.kb_doc_names = [f.name for f in uploaded]
         st.session_state.pdf_uploaded = True
 
-    if st.session_state.pdf_uploaded and st.session_state.kb_doc_names:
-        st.caption("已选择的文件：" if is_zh else "Selected PDFs:")
-        for nm in st.session_state.kb_doc_names:
-            st.markdown(f"**{nm}**")
-
     if st.session_state.pdf_uploaded:
-        build_disabled = not bool(os.getenv("OPENAI_API_KEY"))
+        st.write("📄 Files:")
+        for nm in st.session_state.kb_doc_names:
+            st.write(f"- **{nm}**")
 
-        clicked = st.button(
-            "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
-            disabled=build_disabled,
-            use_container_width=True,
-        )
-
-        reset_clicked = st.button(
-            "♻️ 重置知识库" if is_zh else "♻️ Reset Knowledge Base",
-            disabled=build_disabled,
-            use_container_width=True,
-        )
+        clicked = st.button("🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base")
+        reset_clicked = st.button("♻️ 重置" if is_zh else "♻️ Reset KB")
 
         if clicked:
-            with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
+            with st.spinner("📚 Building contract knowledge base..."):
                 vs = build_vectorstore(uploaded)
                 st.session_state.vectorstore = vs
 
@@ -1366,12 +1226,12 @@ Rules:
                 ChatOpenAI = lc["ChatOpenAI"]
                 RetrievalQA = lc["RetrievalQA"]
 
-                retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 8, "lambda_mult": 0.3})
+                retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 8})
                 llm = ChatOpenAI(temperature=0)
 
                 prompt = PromptTemplate(
                     input_variables=["context", "question"],
-                    template=FULL_SCORE_SYSTEM_PROMPT + "\n\n[CONTRACT CONTEXT]\n{context}\n\n[USER QUESTION]\n{question}"
+                    template=FULL_SCORE_SYSTEM_PROMPT + "\n\n[CONTRACT]\n{context}\n\n[QUESTION]\n{question}"
                 )
 
                 st.session_state.chain = RetrievalQA.from_chain_type(
@@ -1382,7 +1242,7 @@ Rules:
                     chain_type_kwargs={"prompt": prompt}
                 )
 
-            st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
+            st.success("✅ Contract knowledge base ready!")
 
         if reset_clicked:
             st.session_state.pop("vectorstore", None)
@@ -1391,20 +1251,13 @@ Rules:
             st.session_state["online_msgs"] = []
             st.session_state["pdf_uploaded"] = False
             st.session_state["uploader_key"] += 1
-            st.toast("知识库已清空。" if is_zh else "Knowledge base cleared.")
+            st.toast("已清空合同知识库")
             st.rerun()
 
+    # ==== Chat UI ====
     has_chain = st.session_state.get("chain") is not None
 
-    st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
-    for m in st.session_state.get("online_msgs", []):
-        render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    user_q = st.chat_input(
-        "就你的合同提问…" if has_chain else "请先构建知识库…",
-        disabled=not has_chain,
-    )
+    user_q = st.chat_input("Ask about your contract…" if has_chain else "请先上传并构建知识库…")
 
     if has_chain and user_q:
         ts_user = now_ts()
@@ -1413,13 +1266,13 @@ Rules:
 
         ans_slot = st.empty()
         with ans_slot.container():
-            render_message("assistant", "…", now_ts())
+            render_message("assistant", "Thinking...", now_ts())
 
         try:
             resp = st.session_state.chain.invoke({"query": user_q})
-            final_text = resp.get("result") or resp.get("answer") or ""
+            final_answer = resp.get("result") or resp.get("answer") or ""
             source_docs = resp.get("source_documents") or []
-            final_md = format_contract_answer(user_q, final_text, source_docs)
+            final_md = format_contract_answer(user_q, final_answer, source_docs)
 
         except Exception as e:
             final_md = f"(RAG failed: {e})"
