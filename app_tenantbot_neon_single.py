@@ -1016,6 +1016,7 @@ if st.session_state.page == "chat":
             }
         }
 
+# with score_bucket version
 
         # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
         def score_bucket(words, text):
