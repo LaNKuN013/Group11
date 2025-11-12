@@ -662,29 +662,29 @@ def small_talk_zh_basic(q_raw: str) -> str | None:
 
 def small_talk_response(q_raw: str) -> str | None:
     q = normalize_text(q_raw.strip())
-    if any_terms_en(q, ["hi","hello","hey","morning","evening","afternoon"]): # or any_phrases(q, ["你好","嗨","哈喽"]):
+    if any_terms_en(q, ["hi","hello","hey","morning","evening","afternoon"]) or any_phrases(q, ["你好","嗨","哈喽"]):
         return "Hello! I’m your Tenant Assistant 👋 How can I help you today?"
-    if any_phrases(q, ["how are you","how's it going","how are u","how are ya","how are things","how do you feel"]): #,"你好吗","最近怎么样","最近如何"]):
+    if any_phrases(q, ["how are you","how's it going","how are u","how are ya","how are things","how do you feel","你好吗","最近怎么样","最近如何"]):
         return "I'm doing well and ready to help! How can I assist you today?"
-    if any_phrases(q, ["who are you","what are you","your name"]): #,"你是谁","你是干什么的"]):
+    if any_phrases(q, ["who are you","what are you","your name","你是谁","你是干什么的"]):
         return "I’m a friendly chatbot that helps tenants understand contracts and manage repairs or rent reminders."
-    if any_terms_en(q, ["thanks","thank","thx","appreciate"]) or any_phrases(q, ["thank you","many thanks"]): #,"谢谢","多谢","非常感谢","感謝"]):
+    if any_terms_en(q, ["thanks","thank","thx","appreciate"]) or any_phrases(q, ["thank you","many thanks","谢谢","多谢","非常感谢","感謝"]):
         return "You're welcome! If there’s anything else you need, just let me know."
-    if any_phrases(q, ["what can you do","what can u do"]): #,"能做什么","你会干嘛"]) or any_terms_en(q, ["function","feature","capability"]):
+    if any_phrases(q, ["what can you do","what can u do","能做什么","你会干嘛"]) or any_terms_en(q, ["function","feature","capability"]):
         return (
             "I can help you read tenancy agreements, create repair tickets, and set rent reminders. "
             "Once you add an API key, I can also answer contract questions directly!"
         )
-    if any_phrases(q, ["how to upload","upload pdf","add document","how to start","start upload"]): #,"怎么上传","如何开始"]):
+    if any_phrases(q, ["how to upload","upload pdf","add document","how to start","start upload","怎么上传","如何开始"]):
         return (
             "Click **‘Upload PDF contracts or house rules’** to add documents. "
             "Then click **‘Build/Refresh Knowledge Base’** after setting your API key."
         )
-    if any_phrases(q, ["rent reminder","rent day","when to pay rent"]): #,"租金提醒","什么时候交房租"]):
+    if any_phrases(q, ["rent reminder","rent day","when to pay rent","租金提醒","什么时候交房租"]):
         return "Use **💰 Create Rent Reminder** in the sidebar to set a monthly reminder."
-    if any_terms_en(q, ["repair","maintain","fix","broken","leak","damage","fault","issue"]): # or any_phrases(q, ["报修","维修","漏水","坏了"]):
+    if any_terms_en(q, ["repair","maintain","fix","broken","leak","damage","fault","issue"]) or any_phrases(q, ["报修","维修","漏水","坏了"]):
         return "Use **🧰 Create Repair Ticket** in the sidebar. Describe the problem and I’ll record it."
-    if any_terms_en(q, ["contract","agreement","lease","term","clause","deposit","renewal","policy","rules"]): # or any_phrases(q, ["合同","条款","押金","续约","租约"]):
+    if any_terms_en(q, ["contract","agreement","lease","term","clause","deposit","renewal","policy","rules"]) or any_phrases(q, ["合同","条款","押金","续约","租约"]):
         return "Upload your contract and set an API key; I’ll then answer questions based on the document."
     return None
 
@@ -697,20 +697,20 @@ def small_talk_response_basic(q_raw: str) -> str | None:
         "contract","agreement","lease","tenant","landlord","deposit","repair","maintenance","damage","clause","policy","rent","renewal","notice","terminate"
     ]):
         return None
-    if any_terms_en(q, ["hi","hello","hey","morning","evening","afternoon"]): # or any_phrases(q, ["你好","嗨","哈喽"]):
+    if any_terms_en(q, ["hi","hello","hey","morning","evening","afternoon"]) or any_phrases(q, ["你好","嗨","哈喽"]):
         return "Hello! I’m your Tenant Assistant 👋 How can I help you today?"
-    if any_phrases(q, ["how are you","how's it going","how are u","how are ya","how are things","how do you feel"]): #,"你好吗","最近怎么样","最近如何"]):
+    if any_phrases(q, ["how are you","how's it going","how are u","how are ya","how are things","how do you feel","你好吗","最近怎么样","最近如何"]):
         return "I'm doing well and ready to help! How can I assist you today?"
-    if any_terms_en(q, ["thanks","thank","thx","appreciate"]) or any_phrases(q, ["thank you","many thanks"]): #,"谢谢","多谢","非常感谢","感謝"]):
+    if any_terms_en(q, ["thanks","thank","thx","appreciate"]) or any_phrases(q, ["thank you","many thanks","谢谢","多谢","非常感谢","感謝"]):
         return "You're welcome! If there’s anything else you need, just let me know."
-    if any_phrases(q, ["who are you","what are you","your name"]): #,"你是谁","你是干什么的"]):
+    if any_phrases(q, ["who are you","what are you","your name","你是谁","你是干什么的"]):
         return "I’m a friendly chatbot that helps tenants understand contracts and manage repairs or rent reminders."
-    if any_phrases(q, ["what can you do","what can u do"]) or any_terms_en(q, ["function","feature","capability"]): #,"能做什么","你会干嘛"]) 
+    if any_phrases(q, ["what can you do","what can u do","能做什么","你会干嘛"]) or any_terms_en(q, ["function","feature","capability"]):
         return (
             "I can help you read tenancy agreements, create repair tickets, and set rent reminders. "
             "Once you add an API key, I can also answer contract questions directly!"
         )
-    if any_phrases(q, ["how to upload","upload pdf","add document","how to start","start upload"]): #,"怎么上传","如何开始"]):
+    if any_phrases(q, ["how to upload","upload pdf","add document","how to start","start upload","怎么上传","如何开始"]):
         return (
             "Click **‘Upload PDF contracts or house rules’** to add documents. "
             "Then click **‘Build/Refresh Knowledge Base’** after setting your API key."
@@ -757,7 +757,6 @@ def guard_language_and_offer_switch(user_text: str) -> bool:
 
     return False
 
-# ===== Message rendering with avatars / 带头像的消息渲染 =====
 def _b64_once(state_key: str, path: str) -> str | None:
     if state_key in st.session_state:
         return st.session_state[state_key]
@@ -914,184 +913,130 @@ if st.session_state.page == "chat":
 
     FULL_SCORE_SYSTEM_PROMPT = """
     You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
-    ALWAYS answer in this exact structure and bullet labels.
+    ALWAYS answer in this structure:
 
     ✅ Answer:
-    <short, direct, actionable answer in 1–3 sentences with exact numbers>
+    <short, direct, actionable answer in 1–3 sentences>
 
-    💡 Breakdown:
-    • Preconditions / timing:
-    • Exact limits (numbers / notice period / who pays):
-    • Required documents / approvals:
-    • Exceptions (when this rule does NOT apply):
-    • Operational steps (if applicable):
+    💡 Breakdown (must cover all that apply):
+    • Preconditions / timing (e.g., "after first 12 months")
+    • Exact limits / who pays / notice period (e.g., "2 months’ notice or 2 months’ rent")
+    • Required documents / approvals (e.g., "documentary proof", "landlord approval if > S$200")
+    • Important exceptions (e.g., "no diplomatic clause during renewal")
+    • Operational steps (e.g., "joint inspection, handover keys")
 
-    🟢 Good to know (optional):
-    <benefit to the tenant, if the contract states it>
-
-    🔴 Warning (optional):
-    <penalty, reimbursement, forfeiture, or risk stated in the contract>
-
-    🔎 Relevant Contract Excerpts (verbatim):
+    🔎 Relevant Contract Excerpts:
     "<verbatim quote 1>" (Clause <id>, page <n>)
     "<verbatim quote 2>" (Clause <id>, page <n>)
 
     Rules:
-    - When the retrieved context contains ANY money amount or time limit (e.g., S$200, 14 days, 7 days, 2 months),
-    you MUST repeat those numbers **verbatim** in both ✅ Answer and 💡 Breakdown.
-    - NEVER paraphrase, remove, round, or reinterpret numbers.
-    - ONLY answer based on retrieved PDF excerpts. If unclear or not found, say: "Not mentioned in the contract."
-    - NEVER invent clause numbers or page numbers; include them only if visible in the excerpt.
-    - IGNORE disclaimers/boilerplate text (e.g., “Disclaimer”, “placeholders or fictional information”).
+    - Quote ONLY what’s in retrieved context. If not found, say: "Not mentioned in the contract. Please check with the landlord/agent."
+    - Keep numbers EXACT (S$200, 14 days, 7 days, 2 months).
+    - Never invent clause IDs/pages. If no clause ID is visible, include page only.
+    - Be concise and readable.
     """
-    
-    # ========= 条款匹配与精准引用 ========= #
-    # regex 检出 "Clause 5(c)" 等格式
-    _CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
 
-    def _extract_clause_id(text: str) -> str:
-        m = _CLAUSE_RE.search(text or "")
-        return m.group(1) if m else ""
+    _CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
     
-    # --- 1) 关键词打分：确保始终返回 int ---
     def _keyword_score(question: str, text: str) -> int:
-        """Score relevance by keyword matching / 根据问题匹配关键词打分"""
+        # 非极端做法：简单词频/包含度打分（稳定且无额外依赖）
         q = (question or "").lower()
         t = (text or "").lower()
-
         keys = []
-        # Diplomatic clause
-        if ("diplomatic" in q) or ("relocat" in q) or ("terminate" in q) or ("termination" in q):
-            keys += ["diplomatic", "terminate", "2 months", "commission", "relocat", "deport", "refused"]
-
-        # Repairs
-        if ("repair" in q) or ("repairs" in q) or ("broken" in q) or ("spoil" in q) or ("spoiled" in q) or ("maintenance" in q):
-            keys += ["s$200", "200", "minor repair", "bulb", "tube", "aircon", "air con", "water heater",
-                    "structural", "fair wear", "approval", "landlord approval"]
-
-        # Move-out / handover
-        if ("return" in q) or ("handover" in q) or ("hand over" in q) or ("move out" in q) or ("deliver up" in q):
+        if "diplomatic" in q or "terminate" in q or "relocate" in q:
+            keys += ["diplomatic", "terminate", "relocat", "deport", "refused", "2 months", "commission"]
+        if "repair" in q or "broken" in q or "spoiled" in q:
+            keys += ["s$200", "minor repair", "air con", "aircon", "water heater", "structural", "bulb", "tube", "approval"]
+        if "returning the unit" in q or "move out" in q or "handover" in q:
             keys += ["clean", "dry clean", "curtain", "remove nails", "white putty", "joint inspection", "keys", "no rent"]
-
-        # 👍 始终返回整数
-        return sum(1 for k in keys if k in t)
-
-
-    # --- 2) 条款优先级：补齐默认返回 ---
-    def _clause_priority(question: str):
-        """Return clause priority list based on question intent"""
+        score = 0
+        for k in keys:
+            if k in t:
+                score += 1
+        return score
+    
+    def _clause_priority(question: str) -> list:
         q = (question or "").lower()
-
-        if "diplomatic" in q or "relocat" in q or "terminate" in q or "termination" in q:
+        # 针对常见问题给“条款优先队列”
+        if "diplomatic" in q:
             return ["5(c)", "5(d)", "5(f)"]
-
-        if ("repair" in q) or ("repairs" in q) or ("broken" in q) or ("spoil" in q) or ("spoiled" in q) or ("maintenance" in q):
-            return ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
-
-        if ("return" in q) or ("handover" in q) or ("hand over" in q) or ("move" in q) or ("move out" in q) or ("deliver up" in q):
+        if "repair" in q or "broken" in q or "spoiled" in q:
+            return ["2(i)", "2(g)", "2(j)", "2(e)", "2(f)", "2(k)", "4(c)"]
+        if "return" in q or "move out" in q or "handover" in q:
             return ["2(y)", "2(z)", "6(o)"]
+        return []
 
-        return []  # ← 别漏了这个
-
+    def _extract_clause_id(text: str) -> str:
+        m = re.search(r"(Clause\s*\d+(?:\([a-z]\))?)", text or "", re.IGNORECASE)
+        return m.group(1) if m else ""
     
-    
-    # --- 3) 证据重排：保证分数为 int；规范化条款号匹配 ---
-    def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
-        """Pick most relevant clauses + force include priority ones"""
-        priority = _clause_priority(question)
-        prio_norm = [p.lower().replace("clause", "").strip() for p in priority]
-
+    def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = "") -> List[Dict[str, str]]:
+        # 先打“关键词相似分 + 条款优先分”，再按分数降序选前3
+        prio = _clause_priority(question)
         ranked = []
         seen = set()
-
         for d in docs or []:
-            content = (getattr(d, "page_content", "") or "").strip()
             meta = getattr(d, "metadata", {}) or {}
             page = meta.get("page")
-
+            content = (getattr(d, "page_content", "") or "").strip()
             if not content:
                 continue
-
-            snippet = content[:400].replace("\n", " ")
-            clause_raw = _extract_clause_id(content)  # e.g. "Clause 5(c)"
-            clause_norm = (clause_raw or "").lower().replace("clause", "").strip()  # e.g. "5(c)"
-
-            # 永远是整数
-            score = int(_keyword_score(question, snippet))
-
-            # 命中优先条款 → 加权
-            if clause_norm and (clause_norm in prio_norm):
-                score += 10
-
-            key = (page, clause_raw, snippet[:60])
+            snippet = content[:500].replace("\n", " ")
+            clause = meta.get("clause_guess") or _extract_clause_id(content)
+            # 分数 = 关键词匹配分 + 条款优先分（命中排在更前）
+            score = _keyword_score(question, snippet)
+            if clause:
+                score += (len(prio) - prio.index(clause.lower().replace("clause ","")) 
+                        if clause.lower().replace("clause ","") in [c.lower() for c in prio] else 0)
+            key = (page, clause, snippet[:40])
             if key in seen:
                 continue
             seen.add(key)
-
-            ranked.append((score, {"quote": snippet, "page": page, "clause": clause_raw}))
-
-        # 如需从向量库补缺失的优先条款（可选）
-        if ranked and priority and "vectorstore" in st.session_state:
-            found_norm = { (e[1]["clause"] or "").lower().replace("clause", "").strip() for e in ranked if e[1].get("clause") }
-            missing = [p for p in prio_norm if p not in found_norm]
-            if missing:
-                try:
-                    retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 10})
-                    for clause in missing:
-                        extra = retr.get_relevant_documents(clause)
-                        for ed in extra:
-                            snip = (ed.page_content or "")[:400].replace("\n", " ")
-                            ranked.append((999, {"quote": snip, "page": ed.metadata.get("page"), "clause": f"Clause {clause}"}))
-                            break
-                except Exception:
-                    pass
+            ranked.append((score, {
+                "quote": (snippet[:260] + "...") if len(snippet) > 260 else snippet,
+                "page": page,
+                "clause": clause
+            }))
 
         ranked.sort(key=lambda x: x[0], reverse=True)
-        return [item for _, item in ranked[:max_items]]
-    
+        # 过滤掉分数很低且与问题无关的片段
+        filtered = [item for s, item in ranked if s > 0]
+        out = filtered[:max_items] if filtered else [r[1] for r in ranked[:max_items]]
+        return out
 
     def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
-        """
-        包装最终输出：
-        - 基于 question 选取/重排证据片段
-        - 无证据 → 直接返回 'Not mentioned in the contract.'
-        - 若 LLM 已包含 Answer/Breakdown/Excerpts 标题，则不重复包裹；仅在缺少 Excerpts 时追加
-        """
-        import re
+        excerpts = _pick_excerpts(source_docs, max_items=3, question=user_q)
+        lower_ans = (llm_answer or "").lower()
+        is_refusal = ("not mentioned in the contract" in lower_ans) or (not excerpts)
 
-        text = (llm_answer or "").strip()
-
-        # 1) 选取证据
-        excerpts = _pick_excerpts(source_docs, question=user_q, max_items=3)
-        if not excerpts:
-            return "Not mentioned in the contract."
-
-        # 2) 组装引用文本（带条款/页码；安全截断）
         refs_lines = []
-        for ex in excerpts:
-            q = (ex.get("quote") or "").strip().replace("\n", " ")
-            if len(q) > 230:
-                q = q[:230] + "..."
-            clause = (ex.get("clause") or "").strip()
-            page = ex.get("page")
-            if clause and page is not None:
-                refs_lines.append(f"\"{q}\" ({clause}, page {page})")
-            elif page is not None:
-                refs_lines.append(f"\"{q}\" (page {page})")
-            else:
-                refs_lines.append(f"\"{q}\" (contract)")
-        refs_block = "🔎 Relevant Contract Excerpts:\n" + "\n".join(refs_lines)
+        if not is_refusal:
+            for ex in excerpts:
+                tag = []
+                if ex.get("clause"):
+                    tag.append(ex["clause"])
+                if ex.get("page") is not None:
+                    tag.append(f"page {ex['page']}")
+                tag_str = ", ".join(tag) if tag else "contract"
+                refs_lines.append(f"\"{ex['quote']}\" ({tag_str})")
 
-        # 3) 检测是否已有分区标题（兼容加粗/冒号/大小写）
-        has_excerpts = bool(re.search(r"^\s*🔎\s*.*contract excerpts", text, re.IGNORECASE | re.MULTILINE)) \
-                    or bool(re.search(r"contract excerpts", text, re.IGNORECASE))
+        refs_block = "🔎 Relevant Contract Excerpts:\n" + ("\n".join(refs_lines) if refs_lines else "Not available.")
 
-        # 4) 仅在缺少 Excerpts 时追加；其余维持原样，避免重复
-        if not has_excerpts:
-            return f"{text}\n\n{refs_block}"
+        if "✅ Answer:" not in (llm_answer or ""):
+            wrapped = f"""✅ Answer:
+{(llm_answer or '').strip()}
+
+💡 Breakdown:
+• Key numbers and obligations are based on the contract.
+• See excerpts below for the exact legal basis.
+
+{refs_block}
+"""
+            return wrapped
         else:
-            return text
-        
+            if "🔎 Relevant Contract Excerpts:" not in llm_answer:
+                return (llm_answer or "").strip() + "\n\n" + refs_block
+            return llm_answer
 
     # ===== 页面 UI =====
     is_zh = st.session_state.lang == "zh"
@@ -1150,9 +1095,9 @@ if st.session_state.page == "chat":
                     RetrievalQA = lc["RetrievalQA"]
 
                     # retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.3})
-                    retriever = vs.as_retriever(
+                    retriever = st.session_state.vectorstore.as_retriever(
                         search_type="mmr",
-                        search_kwargs={"k": 8, "fetch_k": 40, "lambda_mult": 0.3}
+                        search_kwargs={"k": 8, "lambda_mult": 0.3}
                     )
                     llm = ChatOpenAI(temperature=0)
 
@@ -1215,12 +1160,8 @@ if st.session_state.page == "chat":
     # === 并入“满分格式”的核心逻辑 ===
     if has_chain and user_q:
         # 语言护栏
-        # if guard_language_and_offer_switch(user_q):
-        #     st.stop()
-        try:
-            guard_language_and_offer_switch(user_q)  # 只提示/切换，不 st.stop()
-        except Exception:
-            pass
+        if guard_language_and_offer_switch(user_q):
+            st.stop()
 
         # 1) 用户气泡
         ts_user = now_ts()
@@ -1236,34 +1177,31 @@ if st.session_state.page == "chat":
         try:
             smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
             if smalltalk is not None:
+                # 小聊优先
                 final_md = smalltalk
                 source_docs = []
             else:
-                # 系统护栏 + 用户问题
+                # 用“系统护栏 + 用户问题”的拼接，尽量引导满分格式
                 system_hint = (
                     "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
                     if is_zh else
                     "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
                 )
                 query = f"{system_hint}\nQuestion: {user_q}"
-
                 with st.spinner("正在回答…" if is_zh else "Answering…"):
-                    resp = None
                     try:
                         resp = st.session_state.chain.invoke({"query": query})
                     except Exception:
-                        # 兼容老接口
                         resp = st.session_state.chain({"query": query})
 
-                # —— 统一解析为 dict —— #
+                # 提取答案 + 证据
                 if isinstance(resp, dict):
                     final_text = resp.get("result") or resp.get("answer") or ""
                     source_docs = resp.get("source_documents") or []
                 else:
-                    final_text = str(resp or "")
-                    source_docs = []
+                    final_text, source_docs = str(resp), []
 
-                # 若链没返回文档，再从向量库兜底取证据，避免第一次没证据导致空白
+                # 若链没返回文档，退而用向量库检索补证据
                 if not source_docs and st.session_state.get("vectorstore") is not None:
                     try:
                         retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -1271,11 +1209,7 @@ if st.session_state.page == "chat":
                     except Exception:
                         source_docs = []
 
-                # 空答案兜底（避免第一次出现空白消息）
-                if not final_text.strip():
-                    final_text = "Not mentioned in the contract."
-
-                # 包装成满分格式
+                # 包装为“满分格式”
                 final_md = format_contract_answer(user_q, final_text, source_docs)
 
         except Exception as e:
