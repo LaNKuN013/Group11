@@ -140,15 +140,18 @@ PDF Upload → PyPDFLoader → Text Splitter → OpenAI Embeddings → FAISS Vec
 
 ---
 
-## 🚀 Quick Start (Local)
+## 🚀 Quick Start
+---
+### Local 🏗️ 
+
 1. Create venv & activate
 
-macOS/Linux
+    macOS/Linux
 ```bush
 python3 -m venv .venv
 source .venv/bin/activate
 ```
-Windows
+    Windows
 ```bush
 py -3 -m venv .venv
 .\.venv\Scripts\activate
@@ -159,7 +162,7 @@ pip install -r requirements.txt
 ```
 3. Configure .env (Environment Variables)
 
-Create a file named .env in the project root directory:
+    Create a file named .env in the project root directory:
 ```bush
 # Required for Contract Chat (RAG)
 OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
@@ -167,15 +170,16 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 # Neon / PostgreSQL connection string (example)
 DATABASE_URL=postgresql+psycopg2://USER:PASSWORD@HOST:PORT/DBNAME
 ```
-You may skip .env if you prefer — you can also enter the OpenAI API Key directly in the sidebar UI.
-When entered via the sidebar, the key is valid for the current session only.
+    You may skip .env if you prefer — you can also enter the OpenAI API Key directly in the sidebar UI.
+    When entered via the sidebar, the key is valid for the current session only.
 
 4. Run the app
 ```bush
 streamlit run app_tenantbot_neon_single.py
 ```
 
-## 🚀 Quick Start (Online)
+---
+### Online 💻
 Open the hosted app:
 
 🔗 https://dss5105group11sasadawdqdd.streamlit.app/
@@ -184,34 +188,40 @@ Open the hosted app:
 
 ## 🧭 How to Use
 
-- **Language Selection**
+### Language selection
 Choose **English / 中文** in the sidebar.
 
-- **General Chat (Offline)**
-Does **not** require an API key.
-Good for small talk and simple questions.
 
-- **Contract Chat (RAG)**
-Enter your **OpenAI API Key** in the sidebar (or configure it in `.env`).
-Upload the tenancy agreement or house rules **PDF**.
-Click **Build/Refresh Knowledge Base** to index the document.
-Ask your question in the input box, e.g., *“What’s the diplomatic clause?”*.
-Click **Reset Knowledge Base** to clear the indexed embeddings and start fresh.
+### General Chat (Offline)
+- Does **not** require an API key
+- Good for small talk and simple questions
 
-- **Create Repair Ticket**
-Enter ticket **title + description** → **Submit**.
-Ticket is stored in **Neon/Postgres**.
 
-- **Create Rent Reminder**
-Select a **due day (1–31)** + optional note → **Save**.
-Reminder is stored in **Neon/Postgres**.
+### Contract Chat (RAG)
+1. Enter your **OpenAI API Key** in the sidebar (or configure it in `.env`)
+2. Upload tenancy agreement or house rules **PDF**
+3. Click **Build/Refresh Knowledge Base** to index the document
+4. Ask your question in the input box, e.g., *“What’s the diplomatic clause?”*
+5. Click **Reset Knowledge Base** to clear the indexed embeddings and start fresh
 
-- **Diagnostics**
-**Test Neon connection** → checks database connectivity.
-**API key detected** → shows if OpenAI key is available for the session.
 
-- **Clear Chat**
-Clears the chat history for the current session (General Chat or Contract Chat).
+### Create Repair Ticket
+- Enter ticket **title + description** → **Submit**
+- Ticket is stored in **Neon/Postgres**
+
+
+### Create Rent Reminder
+- Select a **due day (1–31)** + optional note → **Save**
+- Reminder is stored in **Neon/Postgres**
+
+
+### Diagnostics
+- **Test Neon connection** → checks database connectivity
+- **API key detected** → shows if OpenAI key is available for the session
+
+
+### Clear Chat
+- Clears the chat history for the current session (General Chat or Contract Chat)
 ---
 
 ## 📄 License
