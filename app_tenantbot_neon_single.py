@@ -24,6 +24,7 @@ from datetime import datetime  # timestamps / 时间戳
 from zoneinfo import ZoneInfo  # local timezone SGT / 新加坡时区处理
 import warnings  # suppress specific warnings / 抑制特定警告
 import streamlit as st  # Streamlit UI framework / Streamlit 界面框架
+import re as _re
 
     
 
@@ -947,19 +948,54 @@ def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
     return topn
 
     
-def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
-        """Format final output / 包装最终输出格式"""
-        excerpts = _pick_excerpts(source_docs, question=user_q)
-        refs_lines = [
-            f"\"{ex['quote'][:230]}...\" ({ex['clause']}, page {ex['page']})"
-            for ex in excerpts
-        ]
-        ref_text = "\n".join(refs_lines) if refs_lines else "Not available."
+# def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
+#         """Format final output / 包装最终输出格式"""
+#         excerpts = _pick_excerpts(source_docs, question=user_q)
+#         refs_lines = [
+#             f"\"{ex['quote'][:230]}...\" ({ex['clause']}, page {ex['page']})"
+#             for ex in excerpts
+#         ]
+#         ref_text = "\n".join(refs_lines) if refs_lines else "Not available."
 
-        return f"""{llm_answer.strip()}
-                🔎 Relevant Contract Excerpts:
-                {ref_text}
-                """
+#         return f"""{llm_answer.strip()}
+#                 🔎 Relevant Contract Excerpts:
+#                 {ref_text}
+#                 """
+
+def _escape_md_dollar(s: str) -> str:
+    # 把所有 $ 转义，避免 Streamlit/Markdown 进 LaTeX 模式
+    return (s or "").replace("$", r"\$")
+
+def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
+    excerpts = _pick_excerpts(source_docs, question=user_q, max_items=3)
+    if not excerpts:
+        return "Not mentioned in the contract."
+
+    # 组装引用（保持你现有逻辑）
+    refs_lines = []
+    for ex in excerpts:
+        q = (ex.get("quote") or "").strip().replace("\n", " ")
+        if len(q) > 230:
+            q = q[:230] + "..."
+        clause = (ex.get("clause") or "").strip()
+        page = ex.get("page")
+        if clause and page is not None:
+            refs_lines.append(f"\"{q}\" ({clause}, page {page})")
+        elif page is not None:
+            refs_lines.append(f"\"{q}\" (page {page})")
+        else:
+            refs_lines.append(f"\"{q}\" (contract)")
+
+    refs_block = "🔎 Relevant Contract Excerpts:\n" + "\n".join(refs_lines)
+
+    # 转义 $（同时也转义引用块里的）
+    body = _escape_md_dollar((llm_answer or "").strip())
+    refs_block = _escape_md_dollar(refs_block)
+
+    # 若 LLM 没带“Excerpts”段，追加
+    if "contract excerpts" not in body.lower():
+        return f"{body}\n\n{refs_block}"
+    return body
 
 # ======================= Sidebar (single‑page nav) / 侧栏导航 =======================
 with st.sidebar:
