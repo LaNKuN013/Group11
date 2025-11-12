@@ -944,100 +944,172 @@ if st.session_state.page == "chat":
     - IGNORE disclaimer/boilerplate or anonymization notes (e.g., 'Disclaimer', 'placeholders or fictional information').
     """
     
+    # ========= 条款匹配与精准引用 ========= #
+
+    # regex 检出 "Clause 5(c)" 等格式
     _CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
-    
+
     def _extract_clause_id(text: str) -> str:
-        """Extract clause number if exists / 若包含条款编号则提取"""
         m = _CLAUSE_RE.search(text or "")
         return m.group(1) if m else ""
 
-    # -------------------------------------------------------------------------
-    # ✅ 用问题关键词 + 条款优先级排序，确保引用的是**相关条款**
-    # -------------------------------------------------------------------------
-
     def _keyword_score(question: str, text: str) -> int:
-        """Score relevance by keyword matching / 根据问题匹配关键词打分"""
+        """根据问题匹配关键词，给 snippet 打分"""
         q = (question or "").lower()
         t = (text or "").lower()
 
         keys = []
-        # Diplomatic clause
-        if any(k in q for k in ["diplomatic", "terminate", "termination", "relocat", "transfer", "deport", "refused"]):
-            keys += ["diplomatic", "2 months", "commission", "renewal"]
-
-        # Repairs / maintenance
-        if any(k in q for k in ["repair", "repairs", "broken", "spoil", "spoiled", "spoilt", "maintenance", "fix", "damage"]):
-            keys += [
-                "s$200", "200", "minor repair", "approval", "landlord approval",
-                "air con", "aircon", "water heater", "structural", "bulb", "tube",
-                "wear and tear"
-            ]
-
-        # Move-out / handover
-        if any(k in q for k in ["return", "handover", "hand over", "move out", "deliver up"]):
+        if "diplomatic" in q or "relocate" in q or "terminate" in q:
+            keys += ["diplomatic", "terminate", "relocat", "deport", "refused", "2 months", "commission"]
+        if "repair" in q or "broken" in q or "spoil" in q:
+            keys += ["s$200", "minor repair", "air con", "aircon", "water heater", "structural", "bulb", "tube", "approval"]
+        if "return" in q or "handover" in q or "move out" in q:
             keys += ["clean", "dry clean", "curtain", "remove nails", "white putty", "joint inspection", "keys", "no rent"]
 
-        return sum(1 for k in keys if k in t)
-
+        score = sum([1 for k in keys if k in t])
+        return score
 
     
     def _clause_priority(question: str):
-        """Return clause priority list based on question intent"""
+        """
+        Smart clause-priority by intent scoring with a confidence threshold.
+        根据问题做“意图打分”，只有当意图足够明确时才返回优先条款；否则返回空列表，不干预默认排序。
+        这样避免对其他问题“显得傻”或过拟合。
+        """
         q = (question or "").lower()
 
-        if "diplomatic" in q or "terminate" in q or "relocat" in q or "deport" in q:
-            # include notice, reimbursement, renewal exception
-            return ["5(c)", "5(d)", "5(f)"]
+        # --- 关键词桶（支持同义词/变体）—
+        buckets = {
+            "diplomatic": {
+                "keywords": [
+                    "diplomatic", "terminate", "termination", "relocat", "transfer",
+                    "deport", "refused permission", "work pass", "reside", "notice", "2 months"
+                ],
+                "clauses": ["5(c)", "5(d)", "5(f)"]
+            },
+            "repairs": {
+                "keywords": [
+                    "repair", "repairs", "broken", "spoiled", "maintenance",
+                    "s$200", "bulb", "tube", "aircon", "air con", "water heater",
+                    "structural", "wear and tear", "approval", "landlord approval"
+                ],
+                "clauses": ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
+            },
+            "moveout": {
+                "keywords": [
+                    "return", "move out", "handover", "hand over", "deliver up",
+                    "clean", "dry clean", "curtain", "remove nails", "white putty",
+                    "joint inspection", "keys", "furniture", "no rent"
+                ],
+                "clauses": ["2(y)", "2(z)", "6(o)"]
+            },
+            # 可按需加更多主题（押金、转租、宠物、访客、迟付租金等）
+            "deposit": {
+                "keywords": ["deposit", "security deposit", "forfeit", "deduct", "deduction"],
+                "clauses": []  # 先空着，等你标注具体条款再填
+            },
+            "pets": {
+                "keywords": ["pet", "pets", "animal"],
+                "clauses": []
+            }
+    }
 
-        if any(k in q for k in ["repair", "repairs", "broken", "spoil", "spoiled", "spoilt", "maintenance", "fix", "damage"]):
-            # keep all money/approval/exception related clauses for repairs
-            return ["2(i)", "2(g)", "2(j)", "2(k)", "4(c)", "2(f)", "2(e)"]
+    # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
+        def score_bucket(words, text):
+            return sum(1 for w in words if w in text)
 
-        if any(k in q for k in ["return", "handover", "hand over", "move out", "deliver up"]):
-            return ["2(y)", "2(z)", "6(o)"]
+        scores = {k: score_bucket(v["keywords"], q) for k, v in buckets.items()}
+        # 取最高分的意图
+        best_topic = max(scores, key=scores.get) if scores else None
+        best_score = scores.get(best_topic, 0)
 
-        return []
+        # --- 置信门槛（避免“弱匹配”触发优先条款）---
+        # 经验值：≥2 基本能判断出明确意图；否则交给默认相关性排序即可。
+        CONFIDENCE_THRESHOLD = 2
+        if best_score >= CONFIDENCE_THRESHOLD:
+            return buckets[best_topic]["clauses"]
+        return []  # 不启用优先条款 → 不会“傻”
 
     def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
         """
-        Re-rank excerpts by keyword relevance + soft priority.
-        Also drop disclaimer/placeholder pages so prices and limits are surfaced.
+        Re-rank excerpts by (keyword relevance + soft clause priority).
+        用“关键词相关性 + 软优先条款加权”做重排。优先条款只+权重，不保证一定进前N；
+        这样在非目标问题上不至于“强行引用”错误条款。
         """
-        prio = _clause_priority(question)
+        prio = _clause_priority(question)  # 可能为空 → 不干预
         ranked, seen = [], set()
 
-        BAD_HINTS = ("DISCLAIMER", "placeholders or fictional information", "TENANCY AGREEMENT (PRIVATE CONDO/APARTMENT) Page 1 of 6")
-
         for d in docs or []:
+            meta = getattr(d, "metadata", {}) or {}
+            page = meta.get("page")
             content = (getattr(d, "page_content", "") or "").strip()
             if not content:
                 continue
 
-            # drop boilerplate / disclaimer / anonymization
-            upper = content.upper()
-            if any(bad in upper for bad in BAD_HINTS):
-                continue
-
-            meta = getattr(d, "metadata", {}) or {}
-            page = meta.get("page")
-            snippet = content[:420].replace("\n", " ")
+            snippet = content[:400].replace("\n", " ")
             clause = _extract_clause_id(content)
 
+            # 关键词相关性分
             score = _keyword_score(question, snippet)
 
-            # soft-boost priority clauses so they rise to top
+            # 软优先：命中优先条款则 +5（而不是 +999 或强制塞入）
             if prio and clause and clause.lower().replace("clause ", "") in [p.lower() for p in prio]:
-                score += 6
+                score += 5
 
-            key = (page, clause, snippet[:64])
+            key = (page, clause, snippet[:60])
             if key in seen:
                 continue
             seen.add(key)
-
             ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
 
+        # 排序取前N
         ranked.sort(key=lambda x: x[0], reverse=True)
-        return [item for _, item in ranked[:max_items]]
+        topn = [item for _, item in ranked[:max_items]]
+
+        # 可选：如果明确有优先条款但没进前N，且你“必须覆盖”，可以尝试温和补充（不推荐默认开启）
+        # 例如在 prio 非空且 topn 中没有任何 prio 子集时，适度回查向量库补 1 条
+        # ——为了稳妥，这里给出注释模板，你可以按需要开启：
+        #
+        # if prio and not any((e.get("clause") or "").lower().replace("clause ", "") in [p.lower() for p in prio] for e in topn):
+        #     if "vectorstore" in st.session_state:
+        #         try:
+        #             retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 6})
+        #             # 用条款号或关键词做一次回查
+        #             probe = " OR ".join(prio)
+        #             extra_docs = retr.get_relevant_documents(probe)
+        #             for ed in extra_docs:
+        #                 snip = (ed.page_content or "")[:400].replace("\n", " ")
+        #                 cl = _extract_clause_id(ed.page_content or "")
+        #                 if cl and cl.lower().replace("clause ", "") in [p.lower() for p in prio]:
+        #                     topn.append({"quote": snip, "page": ed.metadata.get("page"), "clause": cl})
+        #                     break
+        #         except Exception:
+        #             pass
+        #
+        return topn
+    
+
+    def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
+        excerpts = _pick_excerpts(source_docs, max_items=3, question=user_q)
+        lower_ans = (llm_answer or "").lower()
+        is_refusal = ("not mentioned" in lower_ans) or (not excerpts)
+
+        refs_lines = []
+        if not is_refusal:
+            for ex in excerpts:
+                tag = []
+                if ex.get("clause"):
+                    tag.append(ex["clause"])
+                if ex.get("page") is not None:
+                    tag.append(f"page {ex['page']}")
+                refs_lines.append(f"\"{ex['quote'][:240]}...\" ({', '.join(tag)})")
+
+        refs_block = "🔎 Relevant Contract Excerpts:\n" + ("\n".join(refs_lines) if refs_lines else "Not available.")
+
+        return f"""{llm_answer.strip()}
+
+{refs_block}
+"""
     
     # def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
     #     """Pick most relevant clauses + force include priority ones"""
@@ -1084,37 +1156,37 @@ if st.session_state.page == "chat":
     #     ranked.sort(key=lambda x: x[0], reverse=True)
     #     return [item for _, item in ranked[:max_items]]
     
-    def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
-        """Compose final markdown with consistent citations."""
-        excerpts = _pick_excerpts(source_docs, max_items=3, question=user_q)
+    # def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
+    #     """Compose final markdown with consistent citations."""
+    #     excerpts = _pick_excerpts(source_docs, max_items=3, question=user_q)
 
-        if not excerpts:
-            # 如果模型给了正文但我们没拿到证据，就按规则提示未提及
-            base = (llm_answer or "").strip() or "Not mentioned in the contract."
-            return f"""{base}
+    #     if not excerpts:
+    #         # 如果模型给了正文但我们没拿到证据，就按规则提示未提及
+    #         base = (llm_answer or "").strip() or "Not mentioned in the contract."
+    #         return f"""{base}
 
-    🔎 Relevant Contract Excerpts:
-    Not available.
-    """
+    # 🔎 Relevant Contract Excerpts:
+    # Not available.
+    # """
 
-        refs_lines = []
-        for ex in excerpts:
-            tag = []
-            if ex.get("clause"):
-                tag.append(ex["clause"])
-            if ex.get("page") is not None:
-                tag.append(f"page {ex['page']}")
-            meta = ", ".join(tag) if tag else "contract"
-            quote = ex["quote"]
-            if len(quote) > 240:
-                quote = quote[:240] + "..."
-            refs_lines.append(f"\"{quote}\" ({meta})")
+    #     refs_lines = []
+    #     for ex in excerpts:
+    #         tag = []
+    #         if ex.get("clause"):
+    #             tag.append(ex["clause"])
+    #         if ex.get("page") is not None:
+    #             tag.append(f"page {ex['page']}")
+    #         meta = ", ".join(tag) if tag else "contract"
+    #         quote = ex["quote"]
+    #         if len(quote) > 240:
+    #             quote = quote[:240] + "..."
+    #         refs_lines.append(f"\"{quote}\" ({meta})")
 
-        refs_block = "🔎 Relevant Contract Excerpts:\n" + "\n".join(refs_lines)
-        return f"""{(llm_answer or "").strip()}
+    #     refs_block = "🔎 Relevant Contract Excerpts:\n" + "\n".join(refs_lines)
+    #     return f"""{(llm_answer or "").strip()}
 
-    {refs_block}
-    """
+    # {refs_block}
+    # """
 
     # def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
     #     """Format final output / 包装最终输出格式"""
