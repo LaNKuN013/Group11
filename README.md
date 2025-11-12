@@ -141,19 +141,18 @@ PDF Upload → PyPDFLoader → Text Splitter → OpenAI Embeddings → FAISS Vec
 ---
 
 ## 🚀 Quick Start
----
+
 ### 🏗️ Local
 
 1. Create venv & activate
-
-   macOS/Linux
+macOS/Linux
    
 ```bush
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-   Windows
+Windows
    
 ```bush
 py -3 -m venv .venv
@@ -167,7 +166,7 @@ pip install -r requirements.txt
 ```
 3. Configure .env (Environment Variables)
 
-   Create a file named .env in the project root directory:
+Create a file named .env in the project root directory:
    
 ```bush
 # Required for Contract Chat (RAG)
@@ -176,15 +175,15 @@ OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 # Neon / PostgreSQL connection string (example)
 DATABASE_URL=postgresql+psycopg2://USER:PASSWORD@HOST:PORT/DBNAME
 ```
-   You may skip .env if you prefer — you can also enter the OpenAI API Key directly in the sidebar UI. 
-   When entered via the sidebar, the key is valid for the current session only.
+
+You may skip .env if you prefer — you can also enter the OpenAI API Key directly in the sidebar UI. 
+When entered via the sidebar, the key is valid for the current session only.
 
 4. Run the app
 ```bush
 streamlit run app_tenantbot_neon_single.py
 ```
 
----
 ### 💻 Online
 Open the hosted app:
 
