@@ -175,11 +175,43 @@ When entered via the sidebar, the key is valid for the current session only.
 streamlit run app_tenantbot_neon_single.py
 ```
 
-## 🚀 Quick Start (Online)
+## Online
 Open the hosted app:
 
 🔗 https://dss5105group11sasadawdqdd.streamlit.app/
 
+---
+
+## 🧭 How to Use
+
+- Language selection
+Choose English / 中文 in the sidebar.
+
+- General Chat (Offline)
+Does not require an API key
+Good for small talk and simple questions
+
+- Contract Chat (RAG)
+Enter your OpenAI API Key in the sidebar (or configure it in .env)
+Upload the tenancy agreement or house rules PDF
+Click Build/Refresh Knowledge Base to index the document
+Ask your question in the input box, e.g., “What’s the diplomatic clause?”
+Click Reset Knowledge Base to clear the indexed embeddings and start fresh
+
+- Create Repair Ticket
+Enter ticket title + description → Submit
+Ticket is stored in Neon/Postgres
+
+- Create Rent Reminder
+Select a due day (1–31) + optional note → Save
+Reminder is stored in Neon/Postgres
+
+- Diagnostics
+Test Neon connection → checks database connectivity
+API key detected → shows if OpenAI key is available for the session
+
+- Clear Chat
+Clears the chat history for the current session (General Chat or Contract Chat)
 
 ---
 
