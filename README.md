@@ -167,7 +167,7 @@ pip install -r requirements.txt
 ```
 3. Configure .env (Environment Variables)
 
-Create a file named .env in the project root directory:
+    Create a file named .env in the project root directory:
    
 ```bush
 # Required for Contract Chat (RAG)
