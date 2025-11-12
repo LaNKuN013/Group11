@@ -23,16 +23,12 @@ from datetime import datetime  # timestamps / 时间戳
 from zoneinfo import ZoneInfo  # local timezone SGT / 新加坡时区处理
 import warnings  # suppress specific warnings / 抑制特定警告
 import streamlit as st  # Streamlit UI framework / Streamlit 界面框架
-import unicodedata # text normalization / 文本归一化
-
 
 # Silence LangChain noisy warnings in logs / 屏蔽 LangChain 的噪声警告
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
 
 _CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 _LATIN_RE = re.compile(r"[A-Za-z]")
-_MONEY_OR_TIME_RE = re.compile(r"(S\$\s?\d{1,6}|\b\d{1,3}\s*(?:days?|months?)\b)", re.IGNORECASE)
-
 
 # --- 主题常量（NUS 配色） ---
 NUS_BLUE = "#00205B"
@@ -721,24 +717,6 @@ def small_talk_response_basic(q_raw: str) -> str | None:
         )
     return None
 
-# ---- PDF text cleaning / PDF 文本清理 ----
-def _collapse_inline_breaks(s: str) -> str:
-    """清理 PDF 里的词内换行/零宽字符/软连字符；规范化 S$ 金额写法"""
-    if not s:
-        return ""
-    s = unicodedata.normalize("NFKC", s)
-    # 去零宽字符 & BOM
-    s = re.sub(r"[\u200B-\u200D\u2060\uFEFF]", "", s)
-    # 软连字符（软换行连词）去掉
-    s = s.replace("\u00AD", "")
-    # 各类换行统一为空格（含 Unicode 段落/行分隔符）
-    s = re.sub(r"[\r\n\u2028\u2029]+", " ", s)
-    # 多余空格收敛
-    s = re.sub(r"[ \t]{2,}", " ", s).strip()
-    # 归一化 S$ 写法： S 200 / S $ 200 / S$ 200 -> S$200
-    s = re.sub(r"S\s*\$?\s*([0-9]{1,6})(\b)", r"S$\1", s)
-    return s
-
 # ===== Language guard (no extra deps) =====
 def detect_lang(text: str) -> str:
     """Return 'zh' if contains CJK, 'en' if only Latin, else 'mixed/other'."""
@@ -984,11 +962,6 @@ if st.session_state.page == "chat":
         return sum([1 for k in keys if k in t])
     
     def _clause_priority(question: str):
-        """
-        Smart clause-priority by intent scoring with a confidence threshold.
-        根据问题做“意图打分”，只有当意图足够明确时才返回优先条款；否则返回空列表，不干预默认排序。
-        这样避免对其他问题“显得傻”或过拟合。
-        """
         q = (question or "").lower()
 
         # --- 关键词桶（支持同义词/变体）—
@@ -1026,8 +999,7 @@ if st.session_state.page == "chat":
                 "clauses": []
             }
         }
-
-# with score_bucket version
+        
         # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
         def score_bucket(words, text):
             return sum(1 for w in words if w in text)
@@ -1042,26 +1014,26 @@ if st.session_state.page == "chat":
         CONFIDENCE_THRESHOLD = 2
         if best_score >= CONFIDENCE_THRESHOLD:
             return buckets[best_topic]["clauses"]
-        return []  # 不启用优先条款 → 不会“傻”
+        return []  
+
     
     def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
+        """
+        Re-rank excerpts by (keyword relevance + soft clause priority).
+        用“关键词相关性 + 软优先条款加权”做重排。优先条款只+权重，不保证一定进前N；
+        这样在非目标问题上不至于“强行引用”错误条款。
+        """
         prio = _clause_priority(question)  # 可能为空 → 不干预
         ranked, seen = [], set()
 
         for d in docs or []:
             meta = getattr(d, "metadata", {}) or {}
             page = meta.get("page")
-            # content = (getattr(d, "page_content", "") or "").strip()
-            # if not content:
-            #     continue
-
-            # snippet = content[:400].replace("\n", " ")
-            
-            content = _collapse_inline_breaks(getattr(d, "page_content", "") or "")
+            content = (getattr(d, "page_content", "") or "").strip()
             if not content:
                 continue
-            snippet = content[:400]
-            
+
+            snippet = content[:400].replace("\n", " ")
             clause = _extract_clause_id(content)
 
             # 关键词相关性分
@@ -1083,52 +1055,19 @@ if st.session_state.page == "chat":
         return topn
 
         
-    # def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
-    #         """Format final output / 包装最终输出格式"""
-    #         excerpts = _pick_excerpts(source_docs, question=user_q)
-    #         refs_lines = [
-    #             f"\"{ex['quote'][:230]}...\" ({ex['clause']}, page {ex['page']})"
-    #             for ex in excerpts
-    #         ]
-    #         ref_text = "\n".join(refs_lines) if refs_lines else "Not available."
-
-    #         return f"""{llm_answer.strip()}
-    #                 🔎 Relevant Contract Excerpts:
-    #                 {ref_text}
-    #                 """
-    
     def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
-        #import re
-        # 先清洗 LLM 的回答，避免出现 S\n200 等
-        text = _collapse_inline_breaks(llm_answer or "")
+            """Format final output / 包装最终输出格式"""
+            excerpts = _pick_excerpts(source_docs, question=user_q)
+            refs_lines = [
+                f"\"{ex['quote'][:230]}...\" ({ex['clause']}, page {ex['page']})"
+                for ex in excerpts
+            ]
+            ref_text = "\n".join(refs_lines) if refs_lines else "Not available."
 
-        excerpts = _pick_excerpts(source_docs, question=user_q, max_items=3)
-        if not excerpts:
-            return "Not mentioned in the contract."
-
-        refs_lines = []
-        for ex in excerpts:
-            q = _collapse_inline_breaks(ex.get("quote") or "")
-            if len(q) > 230:
-                q = q[:230] + "..."
-            clause = (ex.get("clause") or "").strip()
-            page = ex.get("page")
-            if clause and page is not None:
-                refs_lines.append(f"\"{q}\" ({clause}, page {page})")
-            elif page is not None:
-                refs_lines.append(f"\"{q}\" (page {page})")
-            else:
-                refs_lines.append(f"\"{q}\" (contract)")
-
-        refs_block = "🔎 Relevant Contract Excerpts:\n" + "\n".join(refs_lines)
-
-        has_excerpts = bool(re.search(r"^\s*🔎\s*.*contract excerpts", text, re.IGNORECASE | re.MULTILINE)) \
-                    or bool(re.search(r"contract excerpts", text, re.IGNORECASE))
-
-        if not has_excerpts:
-            return f"{text}\n\n{refs_block}"
-        else:
-            return text
+            return f"""{llm_answer.strip()}
+                    🔎 Relevant Contract Excerpts:
+                    {ref_text}
+                    """
 
     # ===== 页面 UI =====
     is_zh = st.session_state.lang == "zh"
