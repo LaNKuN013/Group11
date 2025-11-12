@@ -716,29 +716,29 @@ def small_talk_zh_basic(q_raw: str) -> str | None:
 
 def small_talk_response(q_raw: str) -> str | None:
     q = normalize_text(q_raw.strip())
-    if any_terms_en(q, ["hi","hello","hey","morning","evening","afternoon"]) or any_phrases(q, ["你好","嗨","哈喽"]):
+    if any_terms_en(q, ["hi","hello","hey","morning","evening","afternoon"]): # or any_phrases(q, ["你好","嗨","哈喽"]):
         return "Hello! I’m your Tenant Assistant 👋 How can I help you today?"
-    if any_phrases(q, ["how are you","how's it going","how are u","how are ya","how are things","how do you feel","你好吗","最近怎么样","最近如何"]):
+    if any_phrases(q, ["how are you","how's it going","how are u","how are ya","how are things","how do you feel"]): #,"你好吗","最近怎么样","最近如何"]):
         return "I'm doing well and ready to help! How can I assist you today?"
-    if any_phrases(q, ["who are you","what are you","your name","你是谁","你是干什么的"]):
+    if any_phrases(q, ["who are you","what are you","your name"]): #,"你是谁","你是干什么的"]):
         return "I’m a friendly chatbot that helps tenants understand contracts and manage repairs or rent reminders."
-    if any_terms_en(q, ["thanks","thank","thx","appreciate"]) or any_phrases(q, ["thank you","many thanks","谢谢","多谢","非常感谢","感謝"]):
+    if any_terms_en(q, ["thanks","thank","thx","appreciate"]) or any_phrases(q, ["thank you","many thanks"]): #,"谢谢","多谢","非常感谢","感謝"]):
         return "You're welcome! If there’s anything else you need, just let me know."
-    if any_phrases(q, ["what can you do","what can u do","能做什么","你会干嘛"]) or any_terms_en(q, ["function","feature","capability"]):
+    if any_phrases(q, ["what can you do","what can u do"]): #,"能做什么","你会干嘛"]) or any_terms_en(q, ["function","feature","capability"]):
         return (
             "I can help you read tenancy agreements, create repair tickets, and set rent reminders. "
             "Once you add an API key, I can also answer contract questions directly!"
         )
-    if any_phrases(q, ["how to upload","upload pdf","add document","how to start","start upload","怎么上传","如何开始"]):
+    if any_phrases(q, ["how to upload","upload pdf","add document","how to start","start upload"]): #,"怎么上传","如何开始"]):
         return (
             "Click **‘Upload PDF contracts or house rules’** to add documents. "
             "Then click **‘Build/Refresh Knowledge Base’** after setting your API key."
         )
-    if any_phrases(q, ["rent reminder","rent day","when to pay rent","租金提醒","什么时候交房租"]):
+    if any_phrases(q, ["rent reminder","rent day","when to pay rent"]): #,"租金提醒","什么时候交房租"]):
         return "Use **💰 Create Rent Reminder** in the sidebar to set a monthly reminder."
-    if any_terms_en(q, ["repair","maintain","fix","broken","leak","damage","fault","issue"]) or any_phrases(q, ["报修","维修","漏水","坏了"]):
+    if any_terms_en(q, ["repair","maintain","fix","broken","leak","damage","fault","issue"]): # or any_phrases(q, ["报修","维修","漏水","坏了"]):
         return "Use **🧰 Create Repair Ticket** in the sidebar. Describe the problem and I’ll record it."
-    if any_terms_en(q, ["contract","agreement","lease","term","clause","deposit","renewal","policy","rules"]) or any_phrases(q, ["合同","条款","押金","续约","租约"]):
+    if any_terms_en(q, ["contract","agreement","lease","term","clause","deposit","renewal","policy","rules"]): # or any_phrases(q, ["合同","条款","押金","续约","租约"]):
         return "Upload your contract and set an API key; I’ll then answer questions based on the document."
     return None
 
@@ -751,20 +751,20 @@ def small_talk_response_basic(q_raw: str) -> str | None:
         "contract","agreement","lease","tenant","landlord","deposit","repair","maintenance","damage","clause","policy","rent","renewal","notice","terminate"
     ]):
         return None
-    if any_terms_en(q, ["hi","hello","hey","morning","evening","afternoon"]) or any_phrases(q, ["你好","嗨","哈喽"]):
+    if any_terms_en(q, ["hi","hello","hey","morning","evening","afternoon"]): # or any_phrases(q, ["你好","嗨","哈喽"]):
         return "Hello! I’m your Tenant Assistant 👋 How can I help you today?"
-    if any_phrases(q, ["how are you","how's it going","how are u","how are ya","how are things","how do you feel","你好吗","最近怎么样","最近如何"]):
+    if any_phrases(q, ["how are you","how's it going","how are u","how are ya","how are things","how do you feel"]): #,"你好吗","最近怎么样","最近如何"]):
         return "I'm doing well and ready to help! How can I assist you today?"
-    if any_terms_en(q, ["thanks","thank","thx","appreciate"]) or any_phrases(q, ["thank you","many thanks","谢谢","多谢","非常感谢","感謝"]):
+    if any_terms_en(q, ["thanks","thank","thx","appreciate"]) or any_phrases(q, ["thank you","many thanks"]): #,"谢谢","多谢","非常感谢","感謝"]):
         return "You're welcome! If there’s anything else you need, just let me know."
-    if any_phrases(q, ["who are you","what are you","your name","你是谁","你是干什么的"]):
+    if any_phrases(q, ["who are you","what are you","your name"]): #,"你是谁","你是干什么的"]):
         return "I’m a friendly chatbot that helps tenants understand contracts and manage repairs or rent reminders."
-    if any_phrases(q, ["what can you do","what can u do","能做什么","你会干嘛"]) or any_terms_en(q, ["function","feature","capability"]):
+    if any_phrases(q, ["what can you do","what can u do"]) or any_terms_en(q, ["function","feature","capability"]): #,"能做什么","你会干嘛"]) 
         return (
             "I can help you read tenancy agreements, create repair tickets, and set rent reminders. "
             "Once you add an API key, I can also answer contract questions directly!"
         )
-    if any_phrases(q, ["how to upload","upload pdf","add document","how to start","start upload","怎么上传","如何开始"]):
+    if any_phrases(q, ["how to upload","upload pdf","add document","how to start","start upload"]): #,"怎么上传","如何开始"]):
         return (
             "Click **‘Upload PDF contracts or house rules’** to add documents. "
             "Then click **‘Build/Refresh Knowledge Base’** after setting your API key."
@@ -827,6 +827,7 @@ def guard_language_and_offer_switch(user_text: str) -> bool:
 # ASSISTANT_AVATAR = local_image_base64("chatbot_image.png")  # 放在 .py 同级；或 images/chatbot.png
 # USER_AVATAR      = local_image_base64("an7tvcylywfb1.jpg")  # 可选用户头像
 
+# ===== Message rendering with avatars / 带头像的消息渲染 =====
 def _b64_once(state_key: str, path: str) -> str | None:
     if state_key in st.session_state:
         return st.session_state[state_key]
@@ -1119,61 +1120,188 @@ if st.session_state.page == "chat":
     from typing import List, Dict, Any
 
     FULL_SCORE_SYSTEM_PROMPT = """
-    You are a contract-aware tenant assistant. Use ONLY the tenancy agreement provided via retrieved context.
-    STRICTLY follow this format:
+You are a contract-aware tenant assistant. Use ONLY the tenancy agreement retrieved below.
+ALWAYS answer in this structure:
 
-    ✅ Answer:
-    <short, direct, actionable answer in 1-3 sentences>
+✅ Answer:
+<short, direct, actionable answer in 1–3 sentences>
 
-    💡 Breakdown:
-    • <bullet with exact numbers / limits / who pays / notice periods>
-    • <bullet with conditions / exceptions>
-    • <bullet with steps if needed>
+💡 Breakdown (must cover all that apply):
+• Preconditions / timing (e.g., "after first 12 months")
+• Exact limits / who pays / notice period (e.g., "2 months’ notice / 2 months’ rent in lieu")
+• Required documents / approvals (e.g., "documentary proof", "landlord approval if > S$200")
+• Important exceptions (e.g., "no diplomatic clause during renewal term")
+• Operational steps (e.g., "joint inspection, return keys")
 
-    🔎 Relevant Contract Excerpts:
-    "<verbatim quote 1 from retrieved document>" (Clause <id>, page <n>)
-    "<verbatim quote 2 from retrieved document>" (Clause <id>, page <n>)
+🔎 Relevant Contract Excerpts:
+"<verbatim quote 1>" (Clause <id>, page <n>)
+"<verbatim quote 2>" (Clause <id>, page <n>)
 
-    Rules:
-    - Quote ONLY from retrieved context. If not found in the contract, respond: "Not mentioned in the contract. Please check with the landlord/agent."
-    - Keep key numbers EXACT (e.g., S$200, 14 days, 7 days, 2 months).
-    - Never invent clause IDs or page numbers. If clause id is not explicit, include page only.
-    - Be concise and readable.
-    """
+Rules:
+- Use ONLY information from retrieved context; If not found, say: "Not mentioned in the contract."
+- Keep key numbers EXACT (S$200, 14 days, 7 days, 2 months).
+- Do NOT invent clause number / page number; only include if visible.
+"""
 
+    # ========= 条款匹配与精准引用 ========= #
+
+    # regex 检出 "Clause 5(c)" 等格式
     _CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
 
     def _extract_clause_id(text: str) -> str:
         m = _CLAUSE_RE.search(text or "")
         return m.group(1) if m else ""
 
-    def _pick_excerpts(docs: List[Any], max_items: int = 3) -> List[Dict[str, str]]:
-        out, seen = [], set()
+    def _keyword_score(question: str, text: str) -> int:
+        """根据问题匹配关键词，给 snippet 打分"""
+        q = (question or "").lower()
+        t = (text or "").lower()
+
+        keys = []
+        if "diplomatic" in q or "relocate" in q or "terminate" in q:
+            keys += ["diplomatic", "terminate", "relocat", "deport", "refused", "2 months", "commission"]
+        if "repair" in q or "broken" in q or "spoil" in q:
+            keys += ["s$200", "minor repair", "air con", "aircon", "water heater", "structural", "bulb", "tube", "approval"]
+        if "return" in q or "handover" in q or "move out" in q:
+            keys += ["clean", "dry clean", "curtain", "remove nails", "white putty", "joint inspection", "keys", "no rent"]
+
+        score = sum([1 for k in keys if k in t])
+        return score
+
+    # def _clause_priority(question: str):
+    #     """特定类型问题优先指向特定 Clause"""
+    #     q = (question or "").lower()
+    #     if "diplomatic" in q:
+    #         return ["5(c)", "5(d)", "5(f)"]
+    #     if "repair" in q or "broken" in q or "spoil" in q:
+    #         return ["2(i)", "2(g)", "2(j)", "2(e)", "2(k)", "4(c)"]
+    #     if "return" in q or "handover" in q or "move out" in q:
+    #         return ["2(y)", "2(z)", "6(o)"]
+    #     return []
+    
+    def _clause_priority(question: str):
+        """
+        Smart clause-priority by intent scoring with a confidence threshold.
+        根据问题做“意图打分”，只有当意图足够明确时才返回优先条款；否则返回空列表，不干预默认排序。
+        这样避免对其他问题“显得傻”或过拟合。
+        """
+        q = (question or "").lower()
+
+        # --- 关键词桶（支持同义词/变体）—
+        buckets = {
+            "diplomatic": {
+                "keywords": [
+                    "diplomatic", "terminate", "termination", "relocat", "transfer",
+                    "deport", "refused permission", "work pass", "reside", "notice", "2 months"
+                ],
+                "clauses": ["5(c)", "5(d)", "5(f)"]
+            },
+            "repairs": {
+                "keywords": [
+                    "repair", "repairs", "broken", "spoiled", "maintenance",
+                    "s$200", "bulb", "tube", "aircon", "air con", "water heater",
+                    "structural", "wear and tear", "approval", "landlord approval"
+                ],
+                "clauses": ["2(f)", "2(g)", "2(i)", "2(j)", "2(k)", "4(c)"]
+            },
+            "moveout": {
+                "keywords": [
+                    "return", "move out", "handover", "hand over", "deliver up",
+                    "clean", "dry clean", "curtain", "remove nails", "white putty",
+                    "joint inspection", "keys", "furniture", "no rent"
+                ],
+                "clauses": ["2(y)", "2(z)", "6(o)"]
+            },
+            # 可按需加更多主题（押金、转租、宠物、访客、迟付租金等）
+            "deposit": {
+                "keywords": ["deposit", "security deposit", "forfeit", "deduct", "deduction"],
+                "clauses": []  # 先空着，等你标注具体条款再填
+            },
+            "pets": {
+                "keywords": ["pet", "pets", "animal"],
+                "clauses": []
+            }
+    }
+
+    # --- 统计每个桶的关键词命中数，选分数最高的桶 ---
+        def score_bucket(words, text):
+            return sum(1 for w in words if w in text)
+
+        scores = {k: score_bucket(v["keywords"], q) for k, v in buckets.items()}
+        # 取最高分的意图
+        best_topic = max(scores, key=scores.get) if scores else None
+        best_score = scores.get(best_topic, 0)
+
+        # --- 置信门槛（避免“弱匹配”触发优先条款）---
+        # 经验值：≥2 基本能判断出明确意图；否则交给默认相关性排序即可。
+        CONFIDENCE_THRESHOLD = 2
+        if best_score >= CONFIDENCE_THRESHOLD:
+            return buckets[best_topic]["clauses"]
+        return []  # 不启用优先条款 → 不会“傻”
+
+    def _pick_excerpts(docs: List[Any], max_items: int = 3, question: str = ""):
+        """
+        Re-rank excerpts by (keyword relevance + soft clause priority).
+        用“关键词相关性 + 软优先条款加权”做重排。优先条款只+权重，不保证一定进前N；
+        这样在非目标问题上不至于“强行引用”错误条款。
+        """
+        prio = _clause_priority(question)  # 可能为空 → 不干预
+        ranked, seen = [], set()
+
         for d in docs or []:
             meta = getattr(d, "metadata", {}) or {}
             page = meta.get("page")
             content = (getattr(d, "page_content", "") or "").strip()
             if not content:
                 continue
-            snippet = content[:260].replace("\n", " ").strip()
-            clause = meta.get("clause_guess") or _extract_clause_id(content)
-            key = (page, clause, snippet[:30])
+
+            snippet = content[:400].replace("\n", " ")
+            clause = _extract_clause_id(content)
+
+            # 关键词相关性分
+            score = _keyword_score(question, snippet)
+
+            # 软优先：命中优先条款则 +5（而不是 +999 或强制塞入）
+            if prio and clause and clause.lower().replace("clause ", "") in [p.lower() for p in prio]:
+                score += 5
+
+            key = (page, clause, snippet[:60])
             if key in seen:
                 continue
             seen.add(key)
-            out.append({
-                "quote": snippet + ("..." if len(content) > 260 else ""),
-                "page": page,
-                "clause": clause
-            })
-            if len(out) >= max_items:
-                break
-        return out
+            ranked.append((score, {"quote": snippet, "page": page, "clause": clause}))
+
+        # 排序取前N
+        ranked.sort(key=lambda x: x[0], reverse=True)
+        topn = [item for _, item in ranked[:max_items]]
+
+        # 可选：如果明确有优先条款但没进前N，且你“必须覆盖”，可以尝试温和补充（不推荐默认开启）
+        # 例如在 prio 非空且 topn 中没有任何 prio 子集时，适度回查向量库补 1 条
+        # ——为了稳妥，这里给出注释模板，你可以按需要开启：
+        #
+        # if prio and not any((e.get("clause") or "").lower().replace("clause ", "") in [p.lower() for p in prio] for e in topn):
+        #     if "vectorstore" in st.session_state:
+        #         try:
+        #             retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 6})
+        #             # 用条款号或关键词做一次回查
+        #             probe = " OR ".join(prio)
+        #             extra_docs = retr.get_relevant_documents(probe)
+        #             for ed in extra_docs:
+        #                 snip = (ed.page_content or "")[:400].replace("\n", " ")
+        #                 cl = _extract_clause_id(ed.page_content or "")
+        #                 if cl and cl.lower().replace("clause ", "") in [p.lower() for p in prio]:
+        #                     topn.append({"quote": snip, "page": ed.metadata.get("page"), "clause": cl})
+        #                     break
+        #         except Exception:
+        #             pass
+        #
+        return topn
+    
 
     def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
-        excerpts = _pick_excerpts(source_docs, max_items=3)
+        excerpts = _pick_excerpts(source_docs, max_items=3, question=user_q)
         lower_ans = (llm_answer or "").lower()
-        is_refusal = ("not mentioned in the contract" in lower_ans) or (not excerpts)
+        is_refusal = ("not mentioned" in lower_ans) or (not excerpts)
 
         refs_lines = []
         if not is_refusal:
@@ -1183,33 +1311,20 @@ if st.session_state.page == "chat":
                     tag.append(ex["clause"])
                 if ex.get("page") is not None:
                     tag.append(f"page {ex['page']}")
-                tag_str = ", ".join(tag) if tag else "contract"
-                refs_lines.append(f"\"{ex['quote']}\" ({tag_str})")
+                refs_lines.append(f"\"{ex['quote'][:240]}...\" ({', '.join(tag)})")
 
         refs_block = "🔎 Relevant Contract Excerpts:\n" + ("\n".join(refs_lines) if refs_lines else "Not available.")
 
-        if "✅ Answer:" not in (llm_answer or ""):
-            wrapped = f"""✅ Answer:
-{(llm_answer or '').strip()}
-
-💡 Breakdown:
-• Key numbers and obligations are based on the contract.
-• See excerpts below for the exact legal basis.
+        return f"""{llm_answer.strip()}
 
 {refs_block}
 """
-            return wrapped
-        else:
-            if "🔎 Relevant Contract Excerpts:" not in llm_answer:
-                return (llm_answer or "").strip() + "\n\n" + refs_block
-            return llm_answer
 
-    # ===== 页面 UI =====
+    # ========== 页面/UI ========= #
     is_zh = st.session_state.lang == "zh"
     st.title("租客聊天助手" if is_zh else "Tenant Chatbot Assistant")
     st.caption("基于已上传的租赁合同进行问答" if is_zh else "Contract-aware Q&A using uploaded tenancy documents.")
 
-    # --- Upload PDFs used for RAG / 上传PDF用于RAG ---
     uploaded = st.file_uploader(
         "上传租赁合同或房屋守则（PDF）" if is_zh else "Upload PDF contracts or house rules",
         type="pdf",
@@ -1217,21 +1332,17 @@ if st.session_state.page == "chat":
         key=f"kb_uploader_{st.session_state.get('uploader_key', 0)}",
     )
 
-    # ✅ 处理当前上传 & 记录文件名（持久显示）
     if uploaded and len(uploaded) > 0:
-        st.session_state.kb_doc_names = [f.name for f in uploaded]  # 保存文件名
+        st.session_state.kb_doc_names = [f.name for f in uploaded]
         st.session_state.pdf_uploaded = True
 
-    # ✅ 显示已上传/已构建 PDF 文件名（切换页面不会消失）
     if st.session_state.pdf_uploaded and st.session_state.kb_doc_names:
         st.caption("已选择的文件：" if is_zh else "Selected PDFs:")
         for nm in st.session_state.kb_doc_names:
             st.markdown(f"**{nm}**")
 
-    # ===== Build & Reset 按钮显示逻辑 =====
     if st.session_state.pdf_uploaded:
-
-        build_disabled = not bool(os.getenv("OPENAI_API_KEY"))  # 未设置 API Key 则禁用
+        build_disabled = not bool(os.getenv("OPENAI_API_KEY"))
 
         clicked = st.button(
             "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
@@ -1245,149 +1356,355 @@ if st.session_state.page == "chat":
             use_container_width=True,
         )
 
-        # ===== Build index / 构建知识库 =====
         if clicked:
-            if not uploaded or len(uploaded) == 0:
-                st.warning("请先上传至少一个 PDF。" if is_zh else "Please upload at least one PDF first.")
-            else:
-                with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
-                    vs = build_vectorstore(uploaded)
-                    st.session_state.vectorstore = vs
+            with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
+                vs = build_vectorstore(uploaded)
+                st.session_state.vectorstore = vs
 
-                    # ✅ 使用满分格式 Prompt 来建链（保留你的原逻辑也可，只要 return_source_documents=True）
-                    lc = lazy_import_langchain()
-                    PromptTemplate = lc["PromptTemplate"]
-                    ChatOpenAI = lc["ChatOpenAI"]
-                    RetrievalQA = lc["RetrievalQA"]
+                lc = lazy_import_langchain()
+                PromptTemplate = lc["PromptTemplate"]
+                ChatOpenAI = lc["ChatOpenAI"]
+                RetrievalQA = lc["RetrievalQA"]
 
-                    retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.3})
-                    llm = ChatOpenAI(temperature=0)
+                retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 8, "lambda_mult": 0.3})
+                llm = ChatOpenAI(temperature=0)
 
-                    prompt = PromptTemplate(
-                        input_variables=["context", "question"],
-                        template=(
-                            FULL_SCORE_SYSTEM_PROMPT
-                            + "\n\n[CONTRACT CONTEXT]\n{context}\n\n[USER QUESTION]\n{question}"
-                        ),
-                    )
+                prompt = PromptTemplate(
+                    input_variables=["context", "question"],
+                    template=FULL_SCORE_SYSTEM_PROMPT + "\n\n[CONTRACT CONTEXT]\n{context}\n\n[USER QUESTION]\n{question}"
+                )
 
-                    # 以 RetrievalQA 构建，强制 return_source_documents=True
-                    st.session_state.chain = RetrievalQA.from_chain_type(
-                        llm=llm,
-                        retriever=retriever,
-                        chain_type="stuff",
-                        return_source_documents=True,
-                        chain_type_kwargs={"prompt": prompt}
-                    )
+                st.session_state.chain = RetrievalQA.from_chain_type(
+                    llm=llm,
+                    retriever=retriever,
+                    chain_type="stuff",
+                    return_source_documents=True,
+                    chain_type_kwargs={"prompt": prompt}
+                )
 
-                st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
+            st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
 
-        # ===== Reset Knowledge Base / 重置知识库 =====
         if reset_clicked:
             st.session_state.pop("vectorstore", None)
             st.session_state.pop("chain", None)
             st.session_state["kb_doc_names"] = []
+            st.session_state["online_msgs"] = []
             st.session_state["pdf_uploaded"] = False
-            st.session_state["online_msgs"] = []  # ✅ 清理合同问答聊天记录
-
-            chain = st.session_state.get("chain")
-            if chain and getattr(chain, "memory", None):
-                try:
-                    chain.memory.clear()
-                except Exception:
-                    pass
-
-            st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
-            st.toast("知识库与合同聊天已清空。" if is_zh else "Knowledge base & contract chat cleared.")
+            st.session_state["uploader_key"] += 1
+            st.toast("知识库已清空。" if is_zh else "Knowledge base cleared.")
             st.rerun()
 
-    # Whether RAG chain exists / 是否已建链
     has_chain = st.session_state.get("chain") is not None
-    
-    # ✅ 渲染历史
+
     st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
     for m in st.session_state.get("online_msgs", []):
         render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Chat input / 输入框
-    ph_ready = "就你的合同提问…" if is_zh else "Ask about your contract…"
-    ph_build = "请先构建知识库…" if is_zh else "Build the knowledge base first…"
     user_q = st.chat_input(
-        ph_ready if has_chain else ph_build,
+        "就你的合同提问…" if has_chain else "请先构建知识库…",
         disabled=not has_chain,
-        key="contract_input"
     )
 
-    # === 并入“满分格式”的核心逻辑 ===
     if has_chain and user_q:
-        # 语言护栏
-        if guard_language_and_offer_switch(user_q):
-            st.stop()
-
-        # 1) 用户气泡
         ts_user = now_ts()
         st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
         render_message("user", user_q, ts_user)
 
-        # 2) 占位回复
         ans_slot = st.empty()
         with ans_slot.container():
             render_message("assistant", "…", now_ts())
 
-        # 3) 调用链
         try:
-            smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
-            if smalltalk is not None:
-                # 小聊优先
-                final_md = smalltalk
-                source_docs = []
-            else:
-                # 用“系统护栏 + 用户问题”的拼接，尽量引导满分格式
-                system_hint = (
-                    "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
-                    if is_zh else
-                    "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
-                )
-                query = f"{system_hint}\nQuestion: {user_q}"
-                with st.spinner("正在回答…" if is_zh else "Answering…"):
-                    try:
-                        resp = st.session_state.chain.invoke({"query": query})
-                    except Exception:
-                        resp = st.session_state.chain({"query": query})
-
-                # 提取答案 + 证据
-                if isinstance(resp, dict):
-                    final_text = resp.get("result") or resp.get("answer") or ""
-                    source_docs = resp.get("source_documents") or []
-                else:
-                    final_text, source_docs = str(resp), []
-
-                # 若链没返回文档，退而用向量库检索补证据
-                if not source_docs and st.session_state.get("vectorstore") is not None:
-                    try:
-                        retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3})
-                        source_docs = retr.get_relevant_documents(user_q)
-                    except Exception:
-                        source_docs = []
-
-                # 包装为“满分格式”
-                final_md = format_contract_answer(user_q, final_text, source_docs)
+            resp = st.session_state.chain.invoke({"query": user_q})
+            final_text = resp.get("result") or resp.get("answer") or ""
+            source_docs = resp.get("source_documents") or []
+            final_md = format_contract_answer(user_q, final_text, source_docs)
 
         except Exception as e:
-            msg = str(e)
-            if "insufficient_quota" in msg or "429" in msg:
-                final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
-            elif "401" in msg or "invalid_api_key" in msg.lower():
-                final_md = "（API Key 无效）" if is_zh else "Invalid API key."
-            else:
-                final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
+            final_md = f"(RAG failed: {e})"
 
-        # 4) 输出 + 入历史
         ts_ans = now_ts()
         st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
         with ans_slot.container():
             render_message("assistant", final_md, ts_ans)
+            
+            
+# if st.session_state.page == "chat":
+#     # ===== 满分格式工具（只在本页面用） =====
+#     import re
+#     from typing import List, Dict, Any
+
+#     FULL_SCORE_SYSTEM_PROMPT = """
+#     You are a contract-aware tenant assistant. Use ONLY the tenancy agreement provided via retrieved context.
+#     STRICTLY follow this format:
+
+#     ✅ Answer:
+#     <short, direct, actionable answer in 1-3 sentences>
+
+#     💡 Breakdown:
+#     • <bullet with exact numbers / limits / who pays / notice periods>
+#     • <bullet with conditions / exceptions>
+#     • <bullet with steps if needed>
+
+#     🔎 Relevant Contract Excerpts:
+#     "<verbatim quote 1 from retrieved document>" (Clause <id>, page <n>)
+#     "<verbatim quote 2 from retrieved document>" (Clause <id>, page <n>)
+
+#     Rules:
+#     - Quote ONLY from retrieved context. If not found in the contract, respond: "Not mentioned in the contract. Please check with the landlord/agent."
+#     - Keep key numbers EXACT (e.g., S$200, 14 days, 7 days, 2 months).
+#     - Never invent clause IDs or page numbers. If clause id is not explicit, include page only.
+#     - Be concise and readable.
+#     """
+
+#     _CLAUSE_RE = re.compile(r"(Clause\s*\d+(?:\([a-z]\))?)", re.IGNORECASE)
+
+#     def _extract_clause_id(text: str) -> str:
+#         m = _CLAUSE_RE.search(text or "")
+#         return m.group(1) if m else ""
+
+#     def _pick_excerpts(docs: List[Any], max_items: int = 3) -> List[Dict[str, str]]:
+#         out, seen = [], set()
+#         for d in docs or []:
+#             meta = getattr(d, "metadata", {}) or {}
+#             page = meta.get("page")
+#             content = (getattr(d, "page_content", "") or "").strip()
+#             if not content:
+#                 continue
+#             snippet = content[:260].replace("\n", " ").strip()
+#             clause = meta.get("clause_guess") or _extract_clause_id(content)
+#             key = (page, clause, snippet[:30])
+#             if key in seen:
+#                 continue
+#             seen.add(key)
+#             out.append({
+#                 "quote": snippet + ("..." if len(content) > 260 else ""),
+#                 "page": page,
+#                 "clause": clause
+#             })
+#             if len(out) >= max_items:
+#                 break
+#         return out
+
+#     def format_contract_answer(user_q: str, llm_answer: str, source_docs: List[Any]) -> str:
+#         excerpts = _pick_excerpts(source_docs, max_items=3)
+#         lower_ans = (llm_answer or "").lower()
+#         is_refusal = ("not mentioned in the contract" in lower_ans) or (not excerpts)
+
+#         refs_lines = []
+#         if not is_refusal:
+#             for ex in excerpts:
+#                 tag = []
+#                 if ex.get("clause"):
+#                     tag.append(ex["clause"])
+#                 if ex.get("page") is not None:
+#                     tag.append(f"page {ex['page']}")
+#                 tag_str = ", ".join(tag) if tag else "contract"
+#                 refs_lines.append(f"\"{ex['quote']}\" ({tag_str})")
+
+#         refs_block = "🔎 Relevant Contract Excerpts:\n" + ("\n".join(refs_lines) if refs_lines else "Not available.")
+
+#         if "✅ Answer:" not in (llm_answer or ""):
+#             wrapped = f"""✅ Answer:
+# {(llm_answer or '').strip()}
+
+# 💡 Breakdown:
+# • Key numbers and obligations are based on the contract.
+# • See excerpts below for the exact legal basis.
+
+# {refs_block}
+# """
+#             return wrapped
+#         else:
+#             if "🔎 Relevant Contract Excerpts:" not in llm_answer:
+#                 return (llm_answer or "").strip() + "\n\n" + refs_block
+#             return llm_answer
+
+#     # ===== 页面 UI =====
+#     is_zh = st.session_state.lang == "zh"
+#     st.title("租客聊天助手" if is_zh else "Tenant Chatbot Assistant")
+#     st.caption("基于已上传的租赁合同进行问答" if is_zh else "Contract-aware Q&A using uploaded tenancy documents.")
+
+#     # --- Upload PDFs used for RAG / 上传PDF用于RAG ---
+#     uploaded = st.file_uploader(
+#         "上传租赁合同或房屋守则（PDF）" if is_zh else "Upload PDF contracts or house rules",
+#         type="pdf",
+#         accept_multiple_files=True,
+#         key=f"kb_uploader_{st.session_state.get('uploader_key', 0)}",
+#     )
+
+#     # ✅ 处理当前上传 & 记录文件名（持久显示）
+#     if uploaded and len(uploaded) > 0:
+#         st.session_state.kb_doc_names = [f.name for f in uploaded]  # 保存文件名
+#         st.session_state.pdf_uploaded = True
+
+#     # ✅ 显示已上传/已构建 PDF 文件名（切换页面不会消失）
+#     if st.session_state.pdf_uploaded and st.session_state.kb_doc_names:
+#         st.caption("已选择的文件：" if is_zh else "Selected PDFs:")
+#         for nm in st.session_state.kb_doc_names:
+#             st.markdown(f"**{nm}**")
+
+#     # ===== Build & Reset 按钮显示逻辑 =====
+#     if st.session_state.pdf_uploaded:
+
+#         build_disabled = not bool(os.getenv("OPENAI_API_KEY"))  # 未设置 API Key 则禁用
+
+#         clicked = st.button(
+#             "🔄 构建/刷新知识库" if is_zh else "🔄 Build/Refresh Knowledge Base",
+#             disabled=build_disabled,
+#             use_container_width=True,
+#         )
+
+#         reset_clicked = st.button(
+#             "♻️ 重置知识库" if is_zh else "♻️ Reset Knowledge Base",
+#             disabled=build_disabled,
+#             use_container_width=True,
+#         )
+
+#         # ===== Build index / 构建知识库 =====
+#         if clicked:
+#             if not uploaded or len(uploaded) == 0:
+#                 st.warning("请先上传至少一个 PDF。" if is_zh else "Please upload at least one PDF first.")
+#             else:
+#                 with st.spinner("正在根据文档构建索引…" if is_zh else "Indexing documents…"):
+#                     vs = build_vectorstore(uploaded)
+#                     st.session_state.vectorstore = vs
+
+#                     # ✅ 使用满分格式 Prompt 来建链（保留你的原逻辑也可，只要 return_source_documents=True）
+#                     lc = lazy_import_langchain()
+#                     PromptTemplate = lc["PromptTemplate"]
+#                     ChatOpenAI = lc["ChatOpenAI"]
+#                     RetrievalQA = lc["RetrievalQA"]
+
+#                     retriever = vs.as_retriever(search_type="mmr", search_kwargs={"k": 5, "lambda_mult": 0.3})
+#                     llm = ChatOpenAI(temperature=0)
+
+#                     prompt = PromptTemplate(
+#                         input_variables=["context", "question"],
+#                         template=(
+#                             FULL_SCORE_SYSTEM_PROMPT
+#                             + "\n\n[CONTRACT CONTEXT]\n{context}\n\n[USER QUESTION]\n{question}"
+#                         ),
+#                     )
+
+#                     # 以 RetrievalQA 构建，强制 return_source_documents=True
+#                     st.session_state.chain = RetrievalQA.from_chain_type(
+#                         llm=llm,
+#                         retriever=retriever,
+#                         chain_type="stuff",
+#                         return_source_documents=True,
+#                         chain_type_kwargs={"prompt": prompt}
+#                     )
+
+#                 st.success("知识库已就绪！现在可以在下方提问。" if is_zh else "Knowledge base ready! Ask questions below.")
+
+#         # ===== Reset Knowledge Base / 重置知识库 =====
+#         if reset_clicked:
+#             st.session_state.pop("vectorstore", None)
+#             st.session_state.pop("chain", None)
+#             st.session_state["kb_doc_names"] = []
+#             st.session_state["pdf_uploaded"] = False
+#             st.session_state["online_msgs"] = []  # ✅ 清理合同问答聊天记录
+
+#             chain = st.session_state.get("chain")
+#             if chain and getattr(chain, "memory", None):
+#                 try:
+#                     chain.memory.clear()
+#                 except Exception:
+#                     pass
+
+#             st.session_state["uploader_key"] = st.session_state.get("uploader_key", 0) + 1
+#             st.toast("知识库与合同聊天已清空。" if is_zh else "Knowledge base & contract chat cleared.")
+#             st.rerun()
+
+#     # Whether RAG chain exists / 是否已建链
+#     has_chain = st.session_state.get("chain") is not None
+    
+#     # ✅ 渲染历史
+#     st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+#     for m in st.session_state.get("online_msgs", []):
+#         render_message(m.get("role", "assistant"), m.get("content", ""), m.get("ts"))
+#     st.markdown('</div>', unsafe_allow_html=True)
+
+#     # Chat input / 输入框
+#     ph_ready = "就你的合同提问…" if is_zh else "Ask about your contract…"
+#     ph_build = "请先构建知识库…" if is_zh else "Build the knowledge base first…"
+#     user_q = st.chat_input(
+#         ph_ready if has_chain else ph_build,
+#         disabled=not has_chain,
+#         key="contract_input"
+#     )
+
+#     # === 并入“满分格式”的核心逻辑 ===
+#     if has_chain and user_q:
+#         # 语言护栏
+#         if guard_language_and_offer_switch(user_q):
+#             st.stop()
+
+#         # 1) 用户气泡
+#         ts_user = now_ts()
+#         st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
+#         render_message("user", user_q, ts_user)
+
+#         # 2) 占位回复
+#         ans_slot = st.empty()
+#         with ans_slot.container():
+#             render_message("assistant", "…", now_ts())
+
+#         # 3) 调用链
+#         try:
+#             smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
+#             if smalltalk is not None:
+#                 # 小聊优先
+#                 final_md = smalltalk
+#                 source_docs = []
+#             else:
+#                 # 用“系统护栏 + 用户问题”的拼接，尽量引导满分格式
+#                 system_hint = (
+#                     "你是一名租客助手。仅根据已上传文档作答；若文档中没有答案，请说明信息不足。"
+#                     if is_zh else
+#                     "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
+#                 )
+#                 query = f"{system_hint}\nQuestion: {user_q}"
+#                 with st.spinner("正在回答…" if is_zh else "Answering…"):
+#                     try:
+#                         resp = st.session_state.chain.invoke({"query": query})
+#                     except Exception:
+#                         resp = st.session_state.chain({"query": query})
+
+#                 # 提取答案 + 证据
+#                 if isinstance(resp, dict):
+#                     final_text = resp.get("result") or resp.get("answer") or ""
+#                     source_docs = resp.get("source_documents") or []
+#                 else:
+#                     final_text, source_docs = str(resp), []
+
+#                 # 若链没返回文档，退而用向量库检索补证据
+#                 if not source_docs and st.session_state.get("vectorstore") is not None:
+#                     try:
+#                         retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3})
+#                         source_docs = retr.get_relevant_documents(user_q)
+#                     except Exception:
+#                         source_docs = []
+
+#                 # 包装为“满分格式”
+#                 final_md = format_contract_answer(user_q, final_text, source_docs)
+
+#         except Exception as e:
+#             msg = str(e)
+#             if "insufficient_quota" in msg or "429" in msg:
+#                 final_md = "（模型额度不足或达到速率限制）" if is_zh else "Quota/rate limit hit."
+#             elif "401" in msg or "invalid_api_key" in msg.lower():
+#                 final_md = "（API Key 无效）" if is_zh else "Invalid API key."
+#             else:
+#                 final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
+
+#         # 4) 输出 + 入历史
+#         ts_ans = now_ts()
+#         st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
+#         with ans_slot.container():
+#             render_message("assistant", final_md, ts_ans)
 
 
 # --- Repair Ticket page / 报修工单 ---
