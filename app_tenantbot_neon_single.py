@@ -1385,23 +1385,19 @@ if st.session_state.page == "chat":
 
     # === 并入“满分格式”的核心逻辑 ===
     if has_chain and user_q:
-    # 语言护栏：只提示/切换语言，不中断执行
+    # 语言护栏（保持原样即可）
         try:
             guard_language_and_offer_switch(user_q)
         except Exception:
             pass
 
-        # 1) 用户气泡（先入历史并立即渲染）
+        # 1) 先把用户问题写入历史 + 立刻渲染一条“用户气泡”
         ts_user = now_ts()
         st.session_state.online_msgs.append({"role": "user", "content": user_q, "ts": ts_user})
+        # 直接渲染，避免必须第二次输入才看到
         render_message("user", user_q, ts_user)
 
-        # 2) 占位回复
-        ans_slot = st.empty()
-        with ans_slot.container():
-            render_message("assistant", "…", now_ts())
-
-        # 3) 调用链
+        # 2) 计算答案（与你现有逻辑一致）
         try:
             smalltalk = small_talk_zh_basic(user_q) if is_zh else small_talk_response_basic(user_q)
             if smalltalk is not None:
@@ -1414,24 +1410,30 @@ if st.session_state.page == "chat":
                     "You are a helpful Tenant Assistant. Answer ONLY based on the uploaded documents."
                 )
                 query = f"{system_hint}\nQuestion: {user_q}"
+
                 with st.spinner("正在回答…" if is_zh else "Answering…"):
                     try:
                         resp = st.session_state.chain.invoke({"query": query})
                     except Exception:
                         resp = st.session_state.chain({"query": query})
 
-                # 提取答案 + 证据
                 if isinstance(resp, dict):
                     final_text = resp.get("result") or resp.get("answer") or ""
                     source_docs = resp.get("source_documents") or []
                 else:
                     final_text, source_docs = str(resp or ""), []
 
-                # 兜底：防止空答案
+                if not source_docs and st.session_state.get("vectorstore") is not None:
+                    try:
+                        retr = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 3})
+                        source_docs = retr.get_relevant_documents(user_q)
+                    except Exception:
+                        source_docs = []
+
                 if not final_text.strip():
                     final_text = "Not mentioned in the contract."
 
-                # 包装为“满分格式”
+                # 包装成满分格式
                 final_md = format_contract_answer(user_q, final_text, source_docs)
 
         except Exception as e:
@@ -1443,11 +1445,10 @@ if st.session_state.page == "chat":
             else:
                 final_md = f"（RAG 调用失败：{e}）" if is_zh else f"RAG call failed: {e}"
 
-        # 4) 输出 + 入历史（无需 st.rerun）
+        # 3) 把答案写入历史 + 立刻渲染“助手气泡”
         ts_ans = now_ts()
         st.session_state.online_msgs.append({"role": "assistant", "content": final_md, "ts": ts_ans})
-        with ans_slot.container():
-            render_message("assistant", final_md, ts_ans)
+        render_message("assistant", final_md, ts_ans)
         
     # if has_chain and user_q:
     #     # 语言护栏
