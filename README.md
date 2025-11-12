@@ -222,15 +222,17 @@ Choose **English / 中文** in the sidebar.
 
 #### Clear Chat
 - Clears the chat history for the current session (General Chat or Contract Chat)
-- 
+
 ---
 
 ## 🛠️ Troubleshooting
-| Issue | Fix |
-|------|-----|
-| 429 insufficient_quota | Change OpenAI key |
-| DB connection failed | Check DATABASE_URL + Neon IP policy |
-| RAG not responding | Upload PDF → Build/Refresh → ask contract-specific questions |
+| Issue                                               | Explanation / Fix                                                                                                                                     |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **429: insufficient_quota** (OpenAI quota exceeded) | Your API key has no remaining quota or billing issue. Replace the key or check your OpenAI billing settings.                                          |
+| **DB connection failed**                            | Check that `DATABASE_URL` is correct, Neon connection allows your IP, and database is accessible.                                                     |
+| **Build/Refresh not responding / Q&A not relevant** | Ensure a PDF has been uploaded → click **Build/Refresh** → ask contract-specific questions. If necessary, click **Reset Knowledge Base** and rebuild. |
+| **Language switch not working**                     | Switch language in sidebar → refresh the page or click **Clear Chat** to reset session state.                                                         |
+
 
 ---
 
