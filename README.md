@@ -145,6 +145,7 @@ PDF Upload → PyPDFLoader → Text Splitter → OpenAI Embeddings → FAISS Vec
 ### 🏗️ Local
 
 1. Create venv & activate
+
 macOS/Linux
    
 ```bush
